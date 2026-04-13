@@ -51,16 +51,20 @@ def test_upsert_jobs_calls_execute():
     mock_conn = MagicMock()
     mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
     mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-    mock_conn.execute.return_value.rowcount = 1
+
+    # First execute() is the pre-query for existing IDs → returns empty (all new)
+    pre_query_result = MagicMock()
+    pre_query_result.scalars.return_value.all.return_value = []
+    # Second execute() is the upsert → rowcount=1
+    upsert_result = MagicMock()
+    upsert_result.rowcount = 1
+    mock_conn.execute.side_effect = [pre_query_result, upsert_result]
 
     service = JobService(engine=mock_engine)
     result = service.upsert_jobs([RAW_JOB], full_sync=False)
 
-    assert mock_conn.execute.called
-    assert "동기화 완료:" in result
-    assert "신규" in result
-    assert "변경" in result
-    assert "유지" in result
+    assert mock_conn.execute.call_count == 2
+    assert "동기화 완료: 신규 1개, 변경 0개, 유지 0개" == result
 
 
 def test_save_preset_invalid_key():

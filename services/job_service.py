@@ -1,6 +1,6 @@
 import json
-from datetime import datetime
-from sqlalchemy import text
+from datetime import datetime, timezone
+from sqlalchemy import text, select
 from sqlalchemy.dialects.mysql import insert
 
 from db.models import jobs_table, applications_table, search_presets_table
@@ -19,7 +19,7 @@ class JobService:
         location = f"{location_str} {district}".strip() if district else location_str
 
         category_tag = raw.get("category_tag") or {}
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         create_time = raw.get("create_time")
         created_at = datetime.fromisoformat(create_time) if create_time else None
@@ -48,7 +48,7 @@ class JobService:
             "job_id": raw["job_id"],
             "status": raw["status"],
             "apply_time": datetime.fromisoformat(apply_time) if apply_time else None,
-            "synced_at": datetime.utcnow(),
+            "synced_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
     def upsert_jobs(self, raw_jobs: list[dict], full_sync: bool = False) -> str:
@@ -59,6 +59,12 @@ class JobService:
         synced_ids = {r["id"] for r in rows}
 
         with self.engine.connect() as conn:
+            # Count pre-existing rows to distinguish inserts from updates
+            existing_ids = set(conn.execute(
+                select(jobs_table.c.id).where(jobs_table.c.id.in_(synced_ids))
+            ).scalars().all())
+            new_count = len(synced_ids - existing_ids)
+
             stmt = insert(jobs_table).values(rows)
             update_dict = {
                 "company_name": stmt.inserted.company_name,
@@ -70,9 +76,9 @@ class JobService:
                 "is_active": stmt.inserted.is_active,
                 "synced_at": stmt.inserted.synced_at,
                 "updated_at": text(
-                    "IF(company_name <> VALUES(company_name) OR title <> VALUES(title) "
-                    "OR location <> VALUES(location) OR employment_type <> VALUES(employment_type) "
-                    "OR annual_from <> VALUES(annual_from) OR annual_to <> VALUES(annual_to), "
+                    "IF(new.company_name <> company_name OR new.title <> title "
+                    "OR new.location <> location OR new.employment_type <> employment_type "
+                    "OR new.annual_from <> annual_from OR new.annual_to <> annual_to, "
                     "NOW(), updated_at)"
                 ),
             }
@@ -85,16 +91,15 @@ class JobService:
                 conn.execute(
                     jobs_table.update()
                     .where(jobs_table.c.id.not_in(synced_ids))
+                    .where(jobs_table.c.is_active == True)
                     .values(is_active=False)
                 )
                 conn.commit()
 
-            # MySQL ON DUPLICATE KEY UPDATE rowcount:
-            # 1 = INSERT (신규), 2 = UPDATE (변경), 0 = 동일값 (유지)
-            total = len(rows)
-            changed = result.rowcount  # INSERT=1, UPDATE=2씩 카운트됨 (근사값)
-            unchanged = total - min(changed, total)
-            return f"동기화 완료: 신규 {changed}개, 변경 0개, 유지 {unchanged}개"
+            # rowcount = new_count*1 + updated*2 + unchanged*0
+            updated_count = (result.rowcount - new_count) // 2
+            unchanged_count = len(rows) - new_count - updated_count
+            return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
 
     def upsert_applications(self, raw_apps: list[dict]) -> str:
         if not raw_apps:
@@ -149,7 +154,7 @@ class JobService:
             lines.append(
                 f"| {row['company_name']} | {row['title']} | {row['location']} | {link} |"
             )
-        lines.append(f"\n총 {len(rows)}개의 미지원 공고")
+        lines.append(f"총 {len(rows)}개의 미지원 공고")
         return "\n".join(lines)
 
     def save_preset(self, name: str, params: dict) -> str:
@@ -163,7 +168,7 @@ class JobService:
         row = {
             "name": name,
             "params": json.dumps(params, ensure_ascii=False),
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
         with self.engine.connect() as conn:
