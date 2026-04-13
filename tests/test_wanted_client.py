@@ -122,3 +122,16 @@ def test_retry_on_429():
     assert mock_get.call_count == 3
     assert mock_sleep.call_count == 2
     assert len(jobs) == 1
+
+
+def test_retry_exhausted_raises():
+    with patch("services.wanted_client.httpx.get") as mock_get, \
+         patch("services.wanted_client.time.sleep"):
+        rate_limit_resp = MagicMock()
+        rate_limit_resp.status_code = 429
+        rate_limit_resp.headers = {}
+        mock_get.return_value = rate_limit_resp
+
+        client = WantedClient()
+        with pytest.raises(RuntimeError, match="Rate limit exceeded"):
+            client.fetch_jobs(job_group_id=518)

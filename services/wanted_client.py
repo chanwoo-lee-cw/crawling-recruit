@@ -17,15 +17,15 @@ class WantedClient:
         self.cookie = cookie if cookie is not _UNSET else os.getenv("WANTED_COOKIE")
         self.user_id = user_id if user_id is not _UNSET else os.getenv("WANTED_USER_ID")
 
-    def _get(self, url: str, params: dict, headers: dict | None = None) -> dict:
+    def _get(self, url: str, params: dict, headers: dict | None = None):
+        resp = None
         for attempt in range(MAX_RETRIES):
             resp = httpx.get(url, params=params, headers=headers or {}, timeout=30)
-            if resp.status_code == 429:
-                wait = int(resp.headers.get("Retry-After", 1))
-                time.sleep(wait)
-                continue
-            return resp
-        return resp  # 마지막 응답 반환 (호출부에서 처리)
+            if resp.status_code != 429:
+                return resp
+            wait = int(resp.headers.get("Retry-After", 1))
+            time.sleep(wait)
+        raise RuntimeError(f"Rate limit exceeded after {MAX_RETRIES} retries: {url}")
 
     def fetch_jobs(
         self,
