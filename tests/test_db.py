@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from db.connection import get_engine, create_tables
 from db.models import jobs_table, applications_table, search_presets_table
