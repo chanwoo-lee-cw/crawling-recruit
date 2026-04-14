@@ -42,12 +42,12 @@ def recommend_jobs(
                 fetched.append(detail)
         if fetched:
             service.upsert_job_details(fetched)
-        # detail 업데이트 후 한 번만 재조회
-        all_rows = service.get_unapplied_job_rows(
-            job_group_id=job_group_id,
-            location=location,
-            employment_type=employment_type,
-        )
+            # detail 업데이트 후 한 번만 재조회
+            all_rows = service.get_unapplied_job_rows(
+                job_group_id=job_group_id,
+                location=location,
+                employment_type=employment_type,
+            )
 
     # 3. 이미 조회된 all_rows를 직접 전달 (DB 재조회 없음)
     candidates = service.get_recommended_jobs(
