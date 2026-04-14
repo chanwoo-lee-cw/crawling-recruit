@@ -150,6 +150,42 @@ class JobService:
             conn.commit()
         return f"완료: {len(rows)}개 처리"
 
+    def get_jobs_without_details(
+        self,
+        job_ids: list[int] | None = None,
+        limit: int | None = None,
+    ) -> list[int]:
+        """job_details가 없는 공고의 job_id 목록 반환."""
+        if job_ids is not None:
+            candidates = job_ids[:limit] if limit is not None else job_ids
+            with self.engine.connect() as conn:
+                existing = set(conn.execute(
+                    select(job_details_table.c.job_id).where(
+                        job_details_table.c.job_id.in_(candidates)
+                    )
+                ).scalars().all())
+            return [jid for jid in candidates if jid not in existing]
+        # Use bound parameters for LIMIT (SQL injection prevention)
+        if limit is not None:
+            query = text("""
+                SELECT j.id FROM jobs j
+                LEFT JOIN job_details jd ON j.id = jd.job_id
+                WHERE jd.job_id IS NULL AND j.is_active = TRUE
+                ORDER BY j.id
+                LIMIT :limit
+            """)
+            params = {"limit": limit}
+        else:
+            query = text("""
+                SELECT j.id FROM jobs j
+                LEFT JOIN job_details jd ON j.id = jd.job_id
+                WHERE jd.job_id IS NULL AND j.is_active = TRUE
+                ORDER BY j.id
+            """)
+            params = {}
+        with self.engine.connect() as conn:
+            return list(conn.execute(query, params).scalars().all())
+
     def get_unapplied_jobs(
         self,
         job_group_id: int | None = None,

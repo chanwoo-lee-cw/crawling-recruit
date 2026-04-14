@@ -67,3 +67,58 @@ def test_save_preset_returns_error_on_invalid_key():
         result = save_search_preset(name="테스트", params={"bad": 1})
 
     assert "유효하지 않은" in result
+
+
+from tools.sync_job_details import sync_job_details
+
+
+def test_sync_job_details_processes_missing():
+    with patch("tools.sync_job_details.get_engine"), \
+         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("tools.sync_job_details.JobService") as MockService, \
+         patch("tools.sync_job_details.time.sleep") as mock_sleep:
+
+        mock_service = MagicMock()
+        mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.upsert_job_details.return_value = "완료: 2개 처리"
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        mock_client.fetch_job_detail.side_effect = [
+            {"job_id": 101, "requirements": "req1", "preferred_points": "pref1", "skill_tags": []},
+            {"job_id": 102, "requirements": "req2", "preferred_points": None, "skill_tags": []},
+        ]
+        MockClient.return_value = mock_client
+
+        result = sync_job_details()
+
+    assert "2개 처리" in result
+    assert mock_client.fetch_job_detail.call_count == 2
+    # 2개 처리 시 딜레이는 1회 (첫 번째는 스킵)
+    mock_sleep.assert_called_once_with(1)
+
+
+def test_sync_job_details_skips_failed_fetch():
+    with patch("tools.sync_job_details.get_engine"), \
+         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("tools.sync_job_details.JobService") as MockService, \
+         patch("tools.sync_job_details.time.sleep"):
+
+        mock_service = MagicMock()
+        mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.upsert_job_details.return_value = "완료: 1개 처리"
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        mock_client.fetch_job_detail.side_effect = [
+            None,  # 101 실패
+            {"job_id": 102, "requirements": "req2", "preferred_points": None, "skill_tags": []},
+        ]
+        MockClient.return_value = mock_client
+
+        result = sync_job_details()
+
+    # 성공한 1개만 upsert
+    called_details = mock_service.upsert_job_details.call_args[0][0]
+    assert len(called_details) == 1
+    assert called_details[0]["job_id"] == 102

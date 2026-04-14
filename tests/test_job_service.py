@@ -147,3 +147,35 @@ def test_get_unapplied_job_rows_returns_list():
     assert isinstance(rows, list)
     assert rows[0]["id"] == 1001
     assert rows[0]["fetched_at"] is None
+
+
+def test_get_jobs_without_details_filters_existing():
+    """job_ids 전달 시 이미 detail 있는 것 제외, limit 적용"""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    # job_id 101은 이미 존재
+    mock_conn.execute.return_value.scalars.return_value.all.return_value = [101]
+
+    service = JobService(engine=mock_engine)
+    result = service.get_jobs_without_details(job_ids=[101, 102, 103], limit=2)
+
+    # limit=2 → [101, 102] 중 101은 이미 있으므로 [102]만
+    assert result == [102]
+
+
+def test_get_jobs_without_details_no_job_ids():
+    """job_ids 없을 때 SQL로 전체 조회 (LIMIT 바운드 파라미터)"""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    mock_conn.execute.return_value.scalars.return_value.all.return_value = [201, 202]
+
+    service = JobService(engine=mock_engine)
+    result = service.get_jobs_without_details(limit=10)
+
+    assert result == [201, 202]
+    call_kwargs = mock_conn.execute.call_args
+    assert call_kwargs is not None
