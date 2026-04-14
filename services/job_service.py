@@ -157,14 +157,14 @@ class JobService:
     ) -> list[int]:
         """job_details가 없는 공고의 job_id 목록 반환."""
         if job_ids is not None:
-            candidates = job_ids[:limit] if limit is not None else job_ids
             with self.engine.connect() as conn:
                 existing = set(conn.execute(
                     select(job_details_table.c.job_id).where(
-                        job_details_table.c.job_id.in_(candidates)
+                        job_details_table.c.job_id.in_(job_ids)
                     )
                 ).scalars().all())
-            return [jid for jid in candidates if jid not in existing]
+            missing = [jid for jid in job_ids if jid not in existing]
+            return missing[:limit] if limit is not None else missing
         # Use bound parameters for LIMIT (SQL injection prevention)
         if limit is not None:
             query = text("""

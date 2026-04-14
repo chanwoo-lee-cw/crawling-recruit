@@ -89,7 +89,11 @@ def recommend_jobs(
         # 마크다운 코드펜스 제거 후 JSON 파싱 및 hallucination 방어
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.DOTALL)
         recommendations = json.loads(raw)
-        recommendations = [r for r in recommendations if int(r.get("job_id", -1)) in candidate_ids]
+        recommendations = [
+            {**r, "job_id": int(r.get("job_id", -1))}
+            for r in recommendations
+            if int(r.get("job_id", -1)) in candidate_ids
+        ]
         recommendations = recommendations[:top_n]
     except Exception as e:
         # Claude API 실패 또는 JSON 파싱 실패 시 skill_tags 점수 순 결과 반환

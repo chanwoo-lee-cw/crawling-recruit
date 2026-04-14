@@ -161,8 +161,8 @@ def test_get_jobs_without_details_filters_existing():
     service = JobService(engine=mock_engine)
     result = service.get_jobs_without_details(job_ids=[101, 102, 103], limit=2)
 
-    # limit=2 → [101, 102] 중 101은 이미 있으므로 [102]만
-    assert result == [102]
+    # 전체 [101, 102, 103] 중 101은 이미 있으므로 [102, 103] → limit=2 적용 → [102, 103]
+    assert result == [102, 103]
 
 
 def test_get_jobs_without_details_no_job_ids():
