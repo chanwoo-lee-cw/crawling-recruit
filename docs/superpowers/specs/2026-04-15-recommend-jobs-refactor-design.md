@@ -28,13 +28,23 @@ def get_job_candidates(
 ) -> str:
 ```
 
+**파라미터 계약:**
+
+- `employment_type`: 한국어(`"정규직"`, `"인턴"`, `"계약직"`) 또는 영어(`"regular"`, `"intern"`, `"contract"`) 모두 허용. `JobService.EMPLOYMENT_TYPE_MAP`이 내부에서 변환 처리.
+- `top_n`: 기본값 30. `get_recommended_jobs`의 기본값(15)보다 크게 설정해 Claude Code가 더 넓은 후보군에서 추론할 수 있도록 함.
+
 **동작:**
 
 1. `JobService.get_unapplied_job_rows()`로 필터 조건(job_group_id, location, employment_type)에 맞는 미지원 공고 전체 조회
-2. `JobService.get_recommended_jobs(skills, rows, top_k=top_n)`으로 skill_tags 매칭 점수 기준 상위 `top_n`개 선별
-3. 각 공고의 `job_id`, `company_name`, `title`, `location`, `employment_type`, `skill_tags`, `requirements`, `preferred_points` 포함한 JSON 문자열 반환
+2. `JobService.get_recommended_jobs(skills, rows, top_k=top_n)`으로 skill_tags 매칭 점수 기준 상위 `top_n`개 선별 (이 메서드는 `fetched_at is None`인 공고를 자동 제외)
+3. 빈 결과 케이스별 반환 문자열:
+   - 1단계에서 rows가 0개: `"조건에 맞는 미지원 공고가 없습니다."`
+   - 2단계 후 후보가 0개 (모든 rows의 `fetched_at`이 NULL — job_details 미수집): `"추천 후보가 없습니다. sync_job_details를 먼저 실행해 공고 상세 정보를 수집해주세요."`
+   - 참고: `get_recommended_jobs`는 skill 점수가 0이어도 `fetched_at`이 있는 공고는 모두 반환(점수순 정렬)하므로, "skill 미매칭으로 인한 0개" 케이스는 발생하지 않음
+4. 후보가 있으면 각 공고를 JSON 직렬화하여 반환. 키 매핑: jobs 테이블의 `id` → JSON의 `"job_id"`. `skill_tags`는 DB 저장값 그대로 전달(Wanted API 원본 형태 유지).
+5. 예외 발생 시 한국어 에러 문자열 반환 (다른 툴과 동일한 에러 처리 패턴).
 
-**반환 예시:**
+**반환 예시 (정상):**
 
 ```json
 [
@@ -44,11 +54,17 @@ def get_job_candidates(
     "title": "Backend Developer",
     "location": "서울 서초구",
     "employment_type": "regular",
-    "skill_tags": [{"text": "Kotlin"}, {"text": "Java"}],
+    "skill_tags": [{"id": 97, "text": "Kotlin", "kind_name": "language"}, ...],
     "requirements": "...",
     "preferred_points": "..."
   }
 ]
+```
+
+**반환 예시 (상세 정보 없음):**
+
+```
+"추천 후보가 없습니다. sync_job_details를 먼저 실행해 공고 상세 정보를 수집해주세요."
 ```
 
 ## 데이터 흐름
