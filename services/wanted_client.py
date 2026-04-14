@@ -7,6 +7,7 @@ load_dotenv()
 
 JOBS_API_URL = "https://www.wanted.co.kr/api/chaos/navigation/v1/results"
 APPS_API_URL = "https://www.wanted.co.kr/api/v1/applications"
+DETAIL_API_URL = "https://www.wanted.co.kr/api/chaos/jobs/v4/{job_id}/details"
 MAX_RETRIES = 3
 
 _UNSET = object()
@@ -108,3 +109,22 @@ class WantedClient:
             params["page"] += 1
 
         return all_apps
+
+    def fetch_job_detail(self, job_id: int) -> dict | None:
+        """단일 공고 detail 조회. 실패 시 None 반환."""
+        url = DETAIL_API_URL.format(job_id=job_id)
+        try:
+            resp = self._get(url, params={})
+        except RuntimeError:
+            return None
+        if resp.status_code != 200:
+            return None
+        data = resp.json().get("data", {})
+        job = data.get("job", {})
+        detail = job.get("detail", {})
+        return {
+            "job_id": job_id,
+            "requirements": detail.get("requirements"),
+            "preferred_points": detail.get("preferred_points"),
+            "skill_tags": data.get("skill_tags", []),
+        }

@@ -135,3 +135,54 @@ def test_retry_exhausted_raises():
         client = WantedClient()
         with pytest.raises(RuntimeError, match="Rate limit exceeded"):
             client.fetch_jobs(job_group_id=518)
+
+
+MOCK_DETAIL_RESPONSE = {
+    "error_code": None,
+    "message": "ok",
+    "data": {
+        "job": {
+            "id": 210918,
+            "detail": {
+                "requirements": "Python 3년 이상",
+                "preferred_points": "FastAPI 경험자 우대",
+            }
+        },
+        "skill_tags": [
+            {"tag_type_id": 1554, "text": "Python"},
+            {"tag_type_id": 1562, "text": "SQL"},
+        ]
+    }
+}
+
+
+def test_fetch_job_detail_success():
+    with patch("services.wanted_client.httpx.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = MOCK_DETAIL_RESPONSE
+        mock_get.return_value = mock_resp
+
+        client = WantedClient()
+        result = client.fetch_job_detail(210918)
+
+    assert result is not None
+    assert result["job_id"] == 210918
+    assert result["requirements"] == "Python 3년 이상"
+    assert result["preferred_points"] == "FastAPI 경험자 우대"
+    assert result["skill_tags"] == [
+        {"tag_type_id": 1554, "text": "Python"},
+        {"tag_type_id": 1562, "text": "SQL"},
+    ]
+
+
+def test_fetch_job_detail_returns_none_on_error():
+    with patch("services.wanted_client.httpx.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_get.return_value = mock_resp
+
+        client = WantedClient()
+        result = client.fetch_job_detail(99999)
+
+    assert result is None
