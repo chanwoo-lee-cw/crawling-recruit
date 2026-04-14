@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 import anthropic
 from db.connection import get_engine
@@ -38,11 +39,12 @@ def recommend_jobs(
             if i > 0:
                 time.sleep(1)
             detail = client.fetch_job_detail(row["id"])
-            if detail:
-                fetched.append(detail)
+            if detail is None:
+                continue
+            fetched.append(detail)
         if fetched:
             service.upsert_job_details(fetched)
-            # detail 업데이트 후 한 번만 재조회
+            # upsert 후 fetched_at이 채워진 최신 rows로 재조회 (correctness 필수)
             all_rows = service.get_unapplied_job_rows(
                 job_group_id=job_group_id,
                 location=location,
@@ -60,20 +62,22 @@ def recommend_jobs(
 
     # 4. Claude API로 최종 추천
     candidate_ids = {c["id"] for c in candidates}
+    prompt_jobs = "\n\n".join(
+        f"job_id: {c['id']}\n회사: {c['company_name']}\n포지션: {c['title']}\n"
+        f"자격요건: {c.get('requirements') or '정보 없음'}\n"
+        f"우대사항: {c.get('preferred_points') or '정보 없음'}"
+        for c in candidates
+    )
+    user_message = (
+        f"내 기술스택: {', '.join(skills)}\n\n"
+        f"다음 채용공고 중 내 스택과 가장 잘 맞는 상위 {top_n}개를 추천해줘.\n"
+        f"반드시 JSON 배열로만 응답해: "
+        f'[{{"job_id": <int>, "reason": "<한 줄 이유>"}}]\n\n'
+        f"{prompt_jobs}"
+    )
+    job_map = {c["id"]: c for c in candidates}
+
     try:
-        prompt_jobs = "\n\n".join(
-            f"job_id: {c['id']}\n회사: {c['company_name']}\n포지션: {c['title']}\n"
-            f"자격요건: {c.get('requirements') or '정보 없음'}\n"
-            f"우대사항: {c.get('preferred_points') or '정보 없음'}"
-            for c in candidates
-        )
-        user_message = (
-            f"내 기술스택: {', '.join(skills)}\n\n"
-            f"다음 채용공고 중 내 스택과 가장 잘 맞는 상위 {top_n}개를 추천해줘.\n"
-            f"반드시 JSON 배열로만 응답해: "
-            f'[{{"job_id": <int>, "reason": "<한 줄 이유>"}}]\n\n'
-            f"{prompt_jobs}"
-        )
         ai_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         response = ai_client.messages.create(
             model=CLAUDE_MODEL,
@@ -82,26 +86,14 @@ def recommend_jobs(
             messages=[{"role": "user", "content": user_message}],
         )
         raw = response.content[0].text.strip()
-        # JSON 파싱 및 hallucination 방어
+        # 마크다운 코드펜스 제거 후 JSON 파싱 및 hallucination 방어
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.DOTALL)
         recommendations = json.loads(raw)
-        recommendations = [r for r in recommendations if r.get("job_id") in candidate_ids]
+        recommendations = [r for r in recommendations if int(r.get("job_id", -1)) in candidate_ids]
         recommendations = recommendations[:top_n]
-
-        job_map = {c["id"]: c for c in candidates}
-        lines = [f"## 추천 공고 Top {len(recommendations)}\n",
-                 "| 회사명 | 포지션 | 지역 | 추천 이유 | 링크 |",
-                 "|---|---|---|---|---|"]
-        for rec in recommendations:
-            job = job_map[rec["job_id"]]
-            link = f"https://www.wanted.co.kr/wd/{job['id']}"
-            lines.append(
-                f"| {job['company_name']} | {job['title']} | {job['location']} "
-                f"| {rec['reason']} | {link} |"
-            )
-        return "\n".join(lines)
-
-    except Exception:
-        # Claude 실패 시 skill_tags 점수 순 결과 반환
+    except Exception as e:
+        # Claude API 실패 또는 JSON 파싱 실패 시 skill_tags 점수 순 결과 반환
+        print(f"[recommend_jobs] Claude API 실패, fallback 사용: {e}")
         lines = ["## 추천 공고 (skill_tags 매칭 기준)\n",
                  "| 회사명 | 포지션 | 지역 | 링크 |",
                  "|---|---|---|---|"]
@@ -109,3 +101,15 @@ def recommend_jobs(
             link = f"https://www.wanted.co.kr/wd/{c['id']}"
             lines.append(f"| {c['company_name']} | {c['title']} | {c['location']} | {link} |")
         return "\n".join(lines)
+
+    lines = [f"## 추천 공고 Top {len(recommendations)}\n",
+             "| 회사명 | 포지션 | 지역 | 추천 이유 | 링크 |",
+             "|---|---|---|---|---|"]
+    for rec in recommendations:
+        job = job_map[rec["job_id"]]
+        link = f"https://www.wanted.co.kr/wd/{job['id']}"
+        lines.append(
+            f"| {job['company_name']} | {job['title']} | {job['location']} "
+            f"| {rec['reason']} | {link} |"
+        )
+    return "\n".join(lines)
