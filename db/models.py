@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Table, Column, Integer, String, Boolean, DateTime, JSON, MetaData
+    Table, Column, Integer, String, Boolean, DateTime, JSON, MetaData, Text, ForeignKey
 )
 
 metadata = MetaData()
@@ -37,4 +37,13 @@ search_presets_table = Table(
     Column("name", String(100), nullable=False, unique=True),
     Column("params", JSON, nullable=False),
     Column("created_at", DateTime, nullable=False),
+)
+
+job_details_table = Table(
+    "job_details", metadata,
+    Column("job_id", Integer, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True),
+    Column("requirements", Text),
+    Column("preferred_points", Text),
+    Column("skill_tags", JSON),
+    Column("fetched_at", DateTime, nullable=False),
 )
