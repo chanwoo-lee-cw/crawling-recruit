@@ -3,12 +3,18 @@ from datetime import datetime, timezone
 from sqlalchemy import text, select
 from sqlalchemy.dialects.mysql import insert
 
-from db.models import jobs_table, applications_table, search_presets_table
+from db.models import jobs_table, applications_table, search_presets_table, job_details_table
 
 ALLOWED_PRESET_KEYS = {"job_group_id", "job_ids", "years", "locations", "limit_pages"}
 
 
 class JobService:
+    EMPLOYMENT_TYPE_MAP = {
+        "정규직": "regular",
+        "인턴": "intern",
+        "계약직": "contract",
+    }
+
     def __init__(self, engine):
         self.engine = engine
 
@@ -118,6 +124,32 @@ class JobService:
 
         return f"지원현황 동기화 완료: 총 {len(rows)}건"
 
+    def upsert_job_details(self, details: list[dict]) -> str:
+        if not details:
+            return "완료: 0개 처리"
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        rows = [
+            {
+                "job_id": d["job_id"],
+                "requirements": d.get("requirements"),
+                "preferred_points": d.get("preferred_points"),
+                "skill_tags": d.get("skill_tags", []),
+                "fetched_at": now,
+            }
+            for d in details
+        ]
+        with self.engine.connect() as conn:
+            stmt = insert(job_details_table).values(rows)
+            upsert_stmt = stmt.on_duplicate_key_update(
+                requirements=stmt.inserted.requirements,
+                preferred_points=stmt.inserted.preferred_points,
+                skill_tags=stmt.inserted.skill_tags,
+                fetched_at=stmt.inserted.fetched_at,
+            )
+            conn.execute(upsert_stmt)
+            conn.commit()
+        return f"완료: {len(rows)}개 처리"
+
     def get_unapplied_jobs(
         self,
         job_group_id: int | None = None,
@@ -156,6 +188,34 @@ class JobService:
             )
         lines.append(f"총 {len(rows)}개의 미지원 공고")
         return "\n".join(lines)
+
+    def get_unapplied_job_rows(
+        self,
+        job_group_id: int | None = None,
+        location: str | None = None,
+        employment_type: str | None = None,
+    ) -> list[dict]:
+        if employment_type:
+            employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
+        query = text("""
+            SELECT j.id, j.company_name, j.title, j.location, j.employment_type,
+                   jd.requirements, jd.preferred_points, jd.skill_tags, jd.fetched_at
+            FROM jobs j
+            LEFT JOIN applications a ON j.id = a.job_id
+            LEFT JOIN job_details jd ON j.id = jd.job_id
+            WHERE a.job_id IS NULL
+              AND j.is_active = TRUE
+              AND (:job_group_id IS NULL OR j.job_group_id = :job_group_id)
+              AND (:location IS NULL OR j.location LIKE CONCAT('%', :location, '%'))
+              AND (:employment_type IS NULL OR j.employment_type = :employment_type)
+        """)
+        with self.engine.connect() as conn:
+            rows = conn.execute(query, {
+                "job_group_id": job_group_id,
+                "location": location,
+                "employment_type": employment_type,
+            }).mappings().all()
+        return [dict(r) for r in rows]
 
     def save_preset(self, name: str, params: dict) -> str:
         invalid_keys = set(params.keys()) - ALLOWED_PRESET_KEYS

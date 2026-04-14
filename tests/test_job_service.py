@@ -102,3 +102,48 @@ def test_get_unapplied_jobs_returns_markdown():
     assert "| 회사명 |" in result
     assert "테스트컴퍼니" in result
     assert "https://www.wanted.co.kr/wd/1001" in result
+
+
+RAW_DETAIL = {
+    "job_id": 1001,
+    "requirements": "Python 3년 이상",
+    "preferred_points": "FastAPI 경험자 우대",
+    "skill_tags": [{"tag_type_id": 1554, "text": "Python"}],
+}
+
+
+def test_upsert_job_details_calls_execute():
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    mock_conn.execute.return_value = MagicMock()
+
+    service = JobService(engine=mock_engine)
+    result = service.upsert_job_details([RAW_DETAIL])
+
+    assert mock_conn.execute.called
+    assert "1개 처리" in result
+
+
+def test_get_unapplied_job_rows_returns_list():
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_conn.execute.return_value.mappings.return_value.all.return_value = [
+        {
+            "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+            "location": "서울", "employment_type": "regular",
+            "requirements": None, "preferred_points": None,
+            "skill_tags": None, "fetched_at": None,
+        }
+    ]
+
+    service = JobService(engine=mock_engine)
+    rows = service.get_unapplied_job_rows()
+
+    assert isinstance(rows, list)
+    assert rows[0]["id"] == 1001
+    assert rows[0]["fetched_at"] is None
