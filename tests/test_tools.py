@@ -122,3 +122,81 @@ def test_sync_job_details_skips_failed_fetch():
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
     assert called_details[0]["job_id"] == 102
+
+
+from tools.recommend_jobs import recommend_jobs
+import anthropic
+
+
+def test_recommend_jobs_calls_claude_and_returns_markdown():
+    from datetime import datetime
+    candidates = [
+        {
+            "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+            "location": "서울", "requirements": "Python req", "preferred_points": "AWS 우대",
+            "skill_tags": [{"tag_type_id": 1554, "text": "Python"}],
+            "fetched_at": datetime.now(),
+        }
+    ]
+
+    with patch("tools.recommend_jobs.get_engine"), \
+         patch("tools.recommend_jobs.JobService") as MockService, \
+         patch("tools.recommend_jobs.WantedClient") as MockClient, \
+         patch("tools.recommend_jobs.anthropic.Anthropic") as MockAnthropic, \
+         patch("tools.recommend_jobs.time.sleep"):
+
+        mock_service = MagicMock()
+        mock_service.get_unapplied_job_rows.return_value = candidates
+        mock_service.get_recommended_jobs.return_value = candidates
+        mock_service.upsert_job_details.return_value = "완료: 0개 처리"
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        MockClient.return_value = mock_client
+
+        mock_claude = MagicMock()
+        mock_claude.messages.create.return_value.content = [
+            MagicMock(text='[{"job_id": 1001, "reason": "Python 스택 일치"}]')
+        ]
+        MockAnthropic.return_value = mock_claude
+
+        result = recommend_jobs(skills=["Python"], top_n=5)
+
+    mock_claude.messages.create.assert_called_once()
+    assert "테스트컴퍼니" in result
+    assert "https://www.wanted.co.kr/wd/1001" in result
+    assert "Python 스택 일치" in result
+
+
+def test_recommend_jobs_fallback_on_claude_failure():
+    from datetime import datetime
+    candidates = [
+        {
+            "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+            "location": "서울", "requirements": "Python req", "preferred_points": None,
+            "skill_tags": [{"tag_type_id": 1554, "text": "Python"}],
+            "fetched_at": datetime.now(),
+        }
+    ]
+
+    with patch("tools.recommend_jobs.get_engine"), \
+         patch("tools.recommend_jobs.JobService") as MockService, \
+         patch("tools.recommend_jobs.WantedClient") as MockClient, \
+         patch("tools.recommend_jobs.anthropic.Anthropic") as MockAnthropic, \
+         patch("tools.recommend_jobs.time.sleep"):
+
+        mock_service = MagicMock()
+        mock_service.get_unapplied_job_rows.return_value = candidates
+        mock_service.get_recommended_jobs.return_value = candidates
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        MockClient.return_value = mock_client
+
+        MockAnthropic.return_value.messages.create.side_effect = Exception("API 오류")
+
+        result = recommend_jobs(skills=["Python"], top_n=5)
+
+    assert isinstance(result, str)
+    assert "테스트컴퍼니" in result
+    assert "https://www.wanted.co.kr/wd/1001" in result

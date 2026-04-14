@@ -179,3 +179,50 @@ def test_get_jobs_without_details_no_job_ids():
     assert result == [201, 202]
     call_kwargs = mock_conn.execute.call_args
     assert call_kwargs is not None
+
+
+def test_get_recommended_jobs_scores_skill_tags():
+    """skill_tags 매칭 수 기준으로 상위 N개 반환, detail 없는 공고 제외"""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+    from datetime import datetime
+    now = datetime.now()
+    all_rows = [
+        {
+            "id": 1, "company_name": "A사", "title": "Backend",
+            "location": "서울", "employment_type": "regular",
+            "requirements": "Python req", "preferred_points": "AWS 우대",
+            "skill_tags": [{"tag_type_id": 1554, "text": "Python"}, {"tag_type_id": 1698, "text": "AWS"}],
+            "fetched_at": now,
+        },
+        {
+            "id": 2, "company_name": "B사", "title": "Frontend",
+            "location": "서울", "employment_type": "regular",
+            "requirements": "React req", "preferred_points": None,
+            "skill_tags": [{"tag_type_id": 1600, "text": "React"}],
+            "fetched_at": now,
+        },
+        {
+            "id": 3, "company_name": "C사", "title": "Fullstack",
+            "location": "서울", "employment_type": "regular",
+            "requirements": None, "preferred_points": None,
+            "skill_tags": None, "fetched_at": None,  # detail 없음
+        },
+    ]
+
+    service = JobService(engine=mock_engine)
+    candidates = service.get_recommended_jobs(
+        skills=["Python", "AWS"],
+        rows=all_rows,
+        top_k=15,
+    )
+
+    # detail 없는 공고(id=3)는 제외
+    assert len(candidates) == 2
+    # 점수 높은 순 (Python+AWS 매칭 2개 > React 매칭 0개)
+    assert candidates[0]["id"] == 1
+    assert candidates[1]["id"] == 2
+    assert all(c["fetched_at"] is not None for c in candidates)

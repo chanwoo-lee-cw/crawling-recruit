@@ -289,6 +289,23 @@ class JobService:
         names = ", ".join(r["name"] for r in rows)
         return f"저장된 프리셋: {names}"
 
+    def get_recommended_jobs(
+        self,
+        skills: list[str],
+        rows: list[dict],
+        top_k: int = 15,
+    ) -> list[dict]:
+        """전달된 rows에서 skill_tags 매칭 점수 기준 상위 top_k개 반환 (detail 없는 공고 제외)."""
+        skills_lower = {s.lower() for s in skills}
+
+        def score(row: dict) -> int:
+            tags = row.get("skill_tags") or []
+            return sum(1 for t in tags if t.get("text", "").lower() in skills_lower)
+
+        with_detail = [r for r in rows if r.get("fetched_at") is not None]
+        scored = sorted(with_detail, key=score, reverse=True)
+        return scored[:top_k]
+
     def get_preset_params(self, name: str) -> dict | None:
         with self.engine.connect() as conn:
             row = conn.execute(
