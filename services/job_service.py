@@ -82,10 +82,10 @@ class JobService:
                 "is_active": stmt.inserted.is_active,
                 "synced_at": stmt.inserted.synced_at,
                 "updated_at": text(
-                    "IF(new.company_name <> company_name OR new.title <> title "
-                    "OR new.location <> location OR new.employment_type <> employment_type "
-                    "OR new.annual_from <> annual_from OR new.annual_to <> annual_to, "
-                    "NOW(), updated_at)"
+                    "IF(new.company_name <> jobs.company_name OR new.title <> jobs.title "
+                    "OR new.location <> jobs.location OR new.employment_type <> jobs.employment_type "
+                    "OR new.annual_from <> jobs.annual_from OR new.annual_to <> jobs.annual_to, "
+                    "NOW(), jobs.updated_at)"
                 ),
             }
             upsert_stmt = stmt.on_duplicate_key_update(**update_dict)
@@ -251,7 +251,16 @@ class JobService:
                 "location": location,
                 "employment_type": employment_type,
             }).mappings().all()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            row = dict(r)
+            if isinstance(row.get("skill_tags"), str):
+                try:
+                    row["skill_tags"] = json.loads(row["skill_tags"])
+                except (json.JSONDecodeError, TypeError):
+                    row["skill_tags"] = []
+            result.append(row)
+        return result
 
     def save_preset(self, name: str, params: dict) -> str:
         invalid_keys = set(params.keys()) - ALLOWED_PRESET_KEYS

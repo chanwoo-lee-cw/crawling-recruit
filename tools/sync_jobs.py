@@ -33,4 +33,8 @@ def sync_jobs(
         locations=locations,
         limit_pages=limit_pages,
     )
+    # API 응답 job 객체에 job_group_id가 없는 경우 요청 파라미터 값으로 보완
+    for job in jobs:
+        if not job.get("job_group_id") and job_group_id:
+            job["job_group_id"] = job_group_id
     return service.upsert_jobs(jobs, full_sync=full_sync)
