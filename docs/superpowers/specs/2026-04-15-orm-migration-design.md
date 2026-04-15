@@ -91,16 +91,23 @@ class SearchPreset(Base):
 
 ### `db/connection.py` — `metadata` 소스 변경
 
-`Base.metadata`를 사용하도록 교체. `Session` import 추가.
+`metadata` import를 `Base`로 교체. `get_engine()`과 `create_tables()` 모두 수정.
 
 ```python
+# 변경 전
+from db.models import metadata
+
+def create_tables():
+    engine = get_engine()
+    metadata.create_all(engine)
+
+# 변경 후
 from sqlalchemy.orm import Session
 from db.models import Base
 
-def get_engine():
-    ...
-    Base.metadata.create_all(engine)  # 기존: metadata.create_all(engine)
-    return engine
+def create_tables():
+    engine = get_engine()
+    Base.metadata.create_all(engine)
 ```
 
 ---
@@ -194,32 +201,81 @@ def get_unapplied_job_rows(self, job_group_id=None, location=None, employment_ty
     ...  # skill_tags JSON 파싱은 현행 유지 (dataclasses 스펙에서 from_row()로 이동 예정)
 ```
 
-**upsert 메서드들** — `engine.connect()` → `Session`, 테이블 참조만 교체:
+**`upsert_jobs`** — 3곳 모두 Session으로 전환:
+
+```python
+# (1) 사전 조회: existing_ids
+# 변경 전: select(jobs_table.c.id).where(jobs_table.c.id.in_(synced_ids))
+# 변경 후:
+session.scalars(select(Job.id).where(Job.id.in_(synced_ids))).all()
+
+# (2) bulk upsert: 테이블 참조만 교체
+# 변경 전: insert(jobs_table).values(rows)
+# 변경 후:
+stmt = insert(Job.__table__).values(rows)
+# update_dict의 text("IF(...)") 는 MySQL 방언 표현식 — 의도적으로 text() 유지
+result = session.execute(stmt.on_duplicate_key_update(**update_dict))
+
+# (3) full_sync 비활성화 UPDATE
+# 변경 전: jobs_table.update().where(jobs_table.c.id.not_in(...))...
+# 변경 후:
+from sqlalchemy import update
+session.execute(
+    update(Job)
+    .where(Job.id.not_in(synced_ids))
+    .where(Job.is_active == True)
+    .values(is_active=False)
+)
+session.commit()
+```
+
+**`upsert_applications`** — `insert(applications_table)` → `insert(Application.__table__)`
+
+**`upsert_job_details`** — `insert(job_details_table)` → `insert(JobDetail.__table__)`
+
+**`save_preset`** — `insert(search_presets_table)` → `insert(SearchPreset.__table__)`
+
+**`list_presets`** — Core `table.select()` → ORM `select()`:
 
 ```python
 # 변경 전
-from sqlalchemy.dialects.mysql import insert
-stmt = insert(jobs_table).values(rows)
+search_presets_table.select().order_by(search_presets_table.c.created_at)
 
 # 변경 후
-stmt = insert(Job.__table__).values(rows)
-
-# 연결 관리
-with Session(self.engine) as session:
-    result = session.execute(stmt.on_duplicate_key_update(...))
-    session.commit()
+rows = session.scalars(
+    select(SearchPreset).order_by(SearchPreset.created_at)
+).all()
+# row는 SearchPreset ORM 객체 → row.name 으로 접근
+names = ", ".join(r.name for r in rows)
 ```
 
-`list_presets`, `get_preset_params`, `save_preset`도 동일하게 `Session` + `SearchPreset` 클래스 사용으로 교체.
+**`get_preset_params`** — Core → ORM:
+
+```python
+# 변경 전
+search_presets_table.select().where(search_presets_table.c.name == name)
+# row["params"] → json.loads(params) if isinstance(params, str) else params
+
+# 변경 후
+row = session.scalars(
+    select(SearchPreset).where(SearchPreset.name == name)
+).first()
+if not row:
+    return None
+# JSON 컬럼은 SQLAlchemy가 자동 역직렬화 — row.params는 이미 dict
+return row.params
+```
+
+> **주의**: `get_preset_params`의 `isinstance(params, str)` 분기는 ORM이 JSON 컬럼을 자동으로 dict으로 반환하므로 제거 가능. 단, 안전을 위해 기존 분기를 유지해도 무방.
 
 ---
 
 ### `tests/test_job_service.py` — mock 패턴 전환
 
-`engine.connect()` mock → `Session` mock으로 전면 교체:
+`engine.connect()` mock → `Session` mock으로 전면 교체. 영향받는 테스트 전체:
 
 ```python
-# 변경 전
+# 변경 전 (모든 테스트 공통 패턴)
 mock_conn = MagicMock()
 mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
 mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
@@ -229,10 +285,21 @@ with patch("services.job_service.Session") as MockSession:
     mock_session = MagicMock()
     MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
     MockSession.return_value.__exit__ = MagicMock(return_value=False)
-    # scalars() 패턴:
+    # scalars().all() 패턴 (get_jobs_without_details, list_presets 등):
     mock_session.scalars.return_value.all.return_value = [...]
-    # execute().mappings().all() 패턴:
+    # execute().mappings().all() 패턴 (get_unapplied_jobs, get_unapplied_job_rows):
     mock_session.execute.return_value.mappings.return_value.all.return_value = [...]
+    # execute().rowcount 패턴 (upsert):
+    mock_session.execute.return_value.rowcount = 1
+```
+
+**`test_upsert_jobs_calls_execute`** — 현재 `side_effect = [pre_query_result, upsert_result]` 두 번 호출 패턴. Session 전환 후 `scalars()`와 `execute()` 호출이 분리되므로 각각 mock:
+
+```python
+mock_session.scalars.return_value.all.return_value = []  # existing_ids 조회
+upsert_result = MagicMock()
+upsert_result.rowcount = 1
+mock_session.execute.return_value = upsert_result
 ```
 
 ---
