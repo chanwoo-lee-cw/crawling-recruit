@@ -24,6 +24,7 @@
 프로젝트 루트에 추가. `db/models.py`는 SQLAlchemy 스키마, `domain.py`는 Python 도메인 객체 담당.
 
 ```python
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -192,6 +193,40 @@ result = [{
 | `test_get_unapplied_job_rows_returns_list` | `rows[0]["id"]` → `rows[0].id`, `rows[0]["fetched_at"]` → `rows[0].fetched_at` |
 | `test_get_recommended_jobs_scores_skill_tags` | `all_rows` dict → `JobCandidate` 객체 리스트로 교체; `candidates[0]["id"]` → `candidates[0].id` |
 | `test_upsert_job_details_calls_execute` | `RAW_DETAIL` dict → `JobDetail(...)` 객체로 교체 |
+
+### `tests/test_tools.py`
+
+**기존 broken import 제거 (pre-existing 이슈):**
+- 127번째 줄 `from tools.recommend_jobs import recommend_jobs`와 128번째 줄 `import anthropic` 및 이를 사용하는 `test_recommend_jobs_calls_claude_and_returns_markdown`, `test_recommend_jobs_fallback_on_claude_failure` 테스트 2개 삭제. `tools/recommend_jobs.py`는 이전 리팩터링에서 이미 제거된 파일이다.
+
+**`sync_job_details` 테스트 mock 수정:**
+
+`fetch_job_detail` mock이 `dict`를 반환하던 것을 `JobDetail` 객체로 교체:
+
+```python
+# 변경 전 (test_sync_job_details_processes_missing, test_sync_job_details_skips_failed_fetch)
+mock_client.fetch_job_detail.side_effect = [
+    {"job_id": 101, "requirements": "req1", "preferred_points": "pref1", "skill_tags": []},
+    ...
+]
+
+# 변경 후
+from domain import JobDetail
+mock_client.fetch_job_detail.side_effect = [
+    JobDetail(job_id=101, requirements="req1", preferred_points="pref1", skill_tags=[]),
+    ...
+]
+```
+
+`upsert_job_details`에 전달된 인자 검증도 속성 접근으로 변경:
+
+```python
+# 변경 전
+assert called_details[0]["job_id"] == 102
+
+# 변경 후
+assert called_details[0].job_id == 102
+```
 
 ---
 
