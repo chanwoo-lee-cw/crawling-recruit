@@ -58,7 +58,7 @@ class Job(Base):
 class Application(Base):
     __tablename__ = "applications"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    job_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)  # relationship() 동작에 필수
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     apply_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
     synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -233,7 +233,19 @@ session.commit()
 
 **`upsert_job_details`** — `insert(job_details_table)` → `insert(JobDetail.__table__)`
 
-**`save_preset`** — `insert(search_presets_table)` → `insert(SearchPreset.__table__)`
+**`save_preset`** — `insert(search_presets_table)` → `insert(SearchPreset.__table__)`, 그리고 `json.dumps(params)` 제거:
+
+```python
+# 변경 전
+row = {"name": name, "params": json.dumps(params, ensure_ascii=False), ...}
+
+# 변경 후
+row = {"name": name, "params": params, ...}  # SQLAlchemy JSON 컬럼이 직렬화 처리
+```
+
+> `get_preset_params`의 `isinstance(params, str)` 분기는 기존 데이터 호환성을 위해 유지.
+
+**`upsert_applications`, `upsert_job_details`** — 각각 `insert(Application.__table__)`, `insert(JobDetail.__table__)` 로 교체 (이외 로직 변경 없음).
 
 **`list_presets`** — Core `table.select()` → ORM `select()`:
 
@@ -304,11 +316,38 @@ mock_session.execute.return_value = upsert_result
 
 ---
 
+### `tests/test_db.py` — `Table` 객체 참조 → `Model.__table__` 으로 교체
+
+```python
+# 변경 전
+from db.models import jobs_table, applications_table, search_presets_table
+
+def test_models_defined():
+    assert jobs_table is not None
+
+def test_jobs_table_columns():
+    col_names = {c.name for c in jobs_table.columns}
+
+# 변경 후
+from db.models import Job, Application, SearchPreset
+
+def test_models_defined():
+    assert Job.__table__ is not None
+    assert Application.__table__ is not None
+    assert SearchPreset.__table__ is not None
+
+def test_jobs_table_columns():
+    col_names = {c.name for c in Job.__table__.columns}
+    # 검증 컬럼 집합은 동일
+```
+
+---
+
 ## 영향 없는 파일
 
 - `tools/` 하위 전체 — `JobService` / `WantedClient` 호출만, DB 직접 접근 없음
 - `services/wanted_client.py` — DB 미사용
-- `tests/test_tools.py` — `sync_job_details` mock 수정은 dataclasses 스펙에서 처리
+- `tests/test_tools.py` — ORM 마이그레이션 범위에서는 변경 없음. 단, `from tools.recommend_jobs import recommend_jobs` (line 127)는 해당 파일이 이미 삭제된 pre-existing 실패이므로, 마이그레이션 후 `pytest` 실행 시 이 실패가 ORM 관련 회귀로 혼동되지 않도록 주의 (`sync_job_details` mock 수정은 dataclasses 스펙에서 처리)
 
 ---
 
