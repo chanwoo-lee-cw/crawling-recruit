@@ -33,14 +33,14 @@ def get_job_candidates(
 
         result = [
             {
-                "job_id": c["id"],
-                "company_name": c["company_name"],
-                "title": c["title"],
-                "location": c["location"],
-                "employment_type": c["employment_type"],
-                "skill_tags": c.get("skill_tags") or [],
-                "requirements": c.get("requirements"),
-                "preferred_points": c.get("preferred_points"),
+                "job_id": c.id,
+                "company_name": c.company_name,
+                "title": c.title,
+                "location": c.location,
+                "employment_type": c.employment_type,
+                "skill_tags": [{"text": t.text} for t in c.skill_tags],
+                "requirements": c.requirements,
+                "preferred_points": c.preferred_points,
             }
             for c in candidates
         ]
