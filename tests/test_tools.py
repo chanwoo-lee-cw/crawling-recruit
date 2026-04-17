@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
+from domain import JobDetail
 
 
 def test_sync_jobs_uses_preset_when_given():
@@ -85,8 +86,8 @@ def test_sync_job_details_processes_missing():
 
         mock_client = MagicMock()
         mock_client.fetch_job_detail.side_effect = [
-            {"job_id": 101, "requirements": "req1", "preferred_points": "pref1", "skill_tags": []},
-            {"job_id": 102, "requirements": "req2", "preferred_points": None, "skill_tags": []},
+            JobDetail(job_id=101, requirements="req1", preferred_points="pref1", skill_tags=[]),
+            JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
         ]
         MockClient.return_value = mock_client
 
@@ -94,7 +95,6 @@ def test_sync_job_details_processes_missing():
 
     assert "2개 처리" in result
     assert mock_client.fetch_job_detail.call_count == 2
-    # 2개 처리 시 딜레이는 1회 (첫 번째는 스킵)
     mock_sleep.assert_called_once_with(1)
 
 
@@ -112,13 +112,12 @@ def test_sync_job_details_skips_failed_fetch():
         mock_client = MagicMock()
         mock_client.fetch_job_detail.side_effect = [
             None,  # 101 실패
-            {"job_id": 102, "requirements": "req2", "preferred_points": None, "skill_tags": []},
+            JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
         ]
         MockClient.return_value = mock_client
 
         result = sync_job_details()
 
-    # 성공한 1개만 upsert
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
-    assert called_details[0]["job_id"] == 102
+    assert called_details[0].job_id == 102  # 속성 접근

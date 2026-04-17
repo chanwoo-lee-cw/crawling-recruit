@@ -2,6 +2,7 @@ import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 from services.job_service import JobService
+from domain import JobCandidate, JobDetail, SkillTag
 
 
 RAW_JOB = {
@@ -24,12 +25,12 @@ RAW_APP = {
     "apply_time": "2026-01-01T00:00:00",
 }
 
-RAW_DETAIL = {
-    "job_id": 1001,
-    "requirements": "Python 3년 이상",
-    "preferred_points": "FastAPI 경험자 우대",
-    "skill_tags": [{"tag_type_id": 1554, "text": "Python"}],
-}
+RAW_DETAIL = JobDetail(
+    job_id=1001,
+    requirements="Python 3년 이상",
+    preferred_points="FastAPI 경험자 우대",
+    skill_tags=[{"tag_type_id": 1554, "text": "Python"}],
+)
 
 
 def test_parse_job_row():
@@ -147,8 +148,8 @@ def test_get_unapplied_job_rows_returns_list():
         rows = service.get_unapplied_job_rows()
 
     assert isinstance(rows, list)
-    assert rows[0]["id"] == 1001
-    assert rows[0]["fetched_at"] is None
+    assert rows[0].id == 1001          # 속성 접근
+    assert rows[0].fetched_at is None  # 속성 접근
 
 
 def test_get_jobs_without_details_filters_existing():
@@ -180,32 +181,32 @@ def test_get_jobs_without_details_no_job_ids():
 
 
 def test_get_recommended_jobs_scores_skill_tags():
-    mock_engine = MagicMock()
+    from datetime import datetime
     now = datetime.now()
     all_rows = [
-        {
-            "id": 1, "company_name": "A사", "title": "Backend",
-            "location": "서울", "employment_type": "regular",
-            "requirements": "Python req", "preferred_points": "AWS 우대",
-            "skill_tags": [{"tag_type_id": 1554, "text": "Python"}, {"tag_type_id": 1698, "text": "AWS"}],
-            "fetched_at": now,
-        },
-        {
-            "id": 2, "company_name": "B사", "title": "Frontend",
-            "location": "서울", "employment_type": "regular",
-            "requirements": "React req", "preferred_points": None,
-            "skill_tags": [{"tag_type_id": 1600, "text": "React"}],
-            "fetched_at": now,
-        },
-        {
-            "id": 3, "company_name": "C사", "title": "Fullstack",
-            "location": "서울", "employment_type": "regular",
-            "requirements": None, "preferred_points": None,
-            "skill_tags": None, "fetched_at": None,
-        },
+        JobCandidate(
+            id=1, company_name="A사", title="Backend",
+            location="서울", employment_type="regular",
+            requirements="Python req", preferred_points="AWS 우대",
+            skill_tags=[SkillTag(text="Python"), SkillTag(text="AWS")],
+            fetched_at=now,
+        ),
+        JobCandidate(
+            id=2, company_name="B사", title="Frontend",
+            location="서울", employment_type="regular",
+            requirements="React req", preferred_points=None,
+            skill_tags=[SkillTag(text="React")],
+            fetched_at=now,
+        ),
+        JobCandidate(
+            id=3, company_name="C사", title="Fullstack",
+            location="서울", employment_type="regular",
+            requirements=None, preferred_points=None,
+            skill_tags=[], fetched_at=None,
+        ),
     ]
 
-    service = JobService(engine=mock_engine)
+    service = JobService(engine=MagicMock())
     candidates = service.get_recommended_jobs(
         skills=["Python", "AWS"],
         rows=all_rows,
@@ -213,9 +214,9 @@ def test_get_recommended_jobs_scores_skill_tags():
     )
 
     assert len(candidates) == 2
-    assert candidates[0]["id"] == 1
-    assert candidates[1]["id"] == 2
-    assert all(c["fetched_at"] is not None for c in candidates)
+    assert candidates[0].id == 1      # 속성 접근
+    assert candidates[1].id == 2
+    assert all(c.fetched_at is not None for c in candidates)
 
 
 def test_job_candidate_from_row_parses_skill_tags():
