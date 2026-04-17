@@ -216,3 +216,33 @@ def test_get_recommended_jobs_scores_skill_tags():
     assert candidates[0]["id"] == 1
     assert candidates[1]["id"] == 2
     assert all(c["fetched_at"] is not None for c in candidates)
+
+
+def test_job_candidate_from_row_parses_skill_tags():
+    from domain import JobCandidate, SkillTag
+    row = {
+        "id": 1, "company_name": "A사", "title": "Backend",
+        "location": "서울", "employment_type": "regular",
+        "requirements": "req", "preferred_points": None,
+        "skill_tags": [{"tag_type_id": 1, "text": "Python"}, {"tag_type_id": 2, "text": "AWS"}],
+        "fetched_at": None,
+    }
+    candidate = JobCandidate.from_row(row)
+    assert candidate.id == 1
+    assert candidate.company_name == "A사"
+    assert len(candidate.skill_tags) == 2
+    assert candidate.skill_tags[0] == SkillTag(text="Python")
+    assert candidate.skill_tags[1] == SkillTag(text="AWS")
+
+
+def test_job_candidate_from_row_handles_null_skill_tags():
+    from domain import JobCandidate
+    row = {
+        "id": 2, "company_name": "B사", "title": "Frontend",
+        "location": None, "employment_type": None,
+        "requirements": None, "preferred_points": None,
+        "skill_tags": None, "fetched_at": None,
+    }
+    candidate = JobCandidate.from_row(row)
+    assert candidate.skill_tags == []
+    assert candidate.fetched_at is None
