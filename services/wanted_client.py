@@ -2,6 +2,7 @@ import os
 import time
 import httpx
 from dotenv import load_dotenv
+from domain import JobDetail
 
 load_dotenv()
 
@@ -110,7 +111,7 @@ class WantedClient:
 
         return all_apps
 
-    def fetch_job_detail(self, job_id: int) -> dict | None:
+    def fetch_job_detail(self, job_id: int) -> JobDetail | None:
         """단일 공고 detail 조회. 실패 시 None 반환."""
         url = DETAIL_API_URL.format(job_id=job_id)
         try:
@@ -122,9 +123,9 @@ class WantedClient:
         data = resp.json().get("data", {})
         job = data.get("job", {})
         detail = job.get("detail", {})
-        return {
-            "job_id": job_id,
-            "requirements": detail.get("requirements"),
-            "preferred_points": detail.get("preferred_points"),
-            "skill_tags": data.get("skill_tags", []),
-        }
+        return JobDetail(
+            job_id=job_id,
+            requirements=detail.get("requirements"),
+            preferred_points=detail.get("preferred_points"),
+            skill_tags=data.get("skill_tags", []),
+        )
