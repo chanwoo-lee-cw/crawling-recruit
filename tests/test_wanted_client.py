@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from services.wanted_client import WantedClient
+from domain import JobDetail
 
 
 MOCK_JOBS_PAGE_1 = {
@@ -167,10 +168,11 @@ def test_fetch_job_detail_success():
         result = client.fetch_job_detail(210918)
 
     assert result is not None
-    assert result["job_id"] == 210918
-    assert result["requirements"] == "Python 3년 이상"
-    assert result["preferred_points"] == "FastAPI 경험자 우대"
-    assert result["skill_tags"] == [
+    assert isinstance(result, JobDetail)
+    assert result.job_id == 210918
+    assert result.requirements == "Python 3년 이상"
+    assert result.preferred_points == "FastAPI 경험자 우대"
+    assert result.skill_tags == [
         {"tag_type_id": 1554, "text": "Python"},
         {"tag_type_id": 1562, "text": "SQL"},
     ]
