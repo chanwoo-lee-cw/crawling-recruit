@@ -1,49 +1,65 @@
-from sqlalchemy import (
-    Table, Column, Integer, String, Boolean, DateTime, JSON, MetaData, Text, ForeignKey
-)
+from datetime import datetime
+from typing import Optional, List
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import Integer, String, Boolean, DateTime, JSON, Text, ForeignKey
 
-metadata = MetaData()
 
-jobs_table = Table(
-    "jobs", metadata,
-    Column("id", Integer, primary_key=True),
-    Column("company_id", Integer, nullable=False),
-    Column("company_name", String(255), nullable=False),
-    Column("title", String(255), nullable=False),
-    Column("location", String(100)),
-    Column("employment_type", String(50)),
-    Column("annual_from", Integer),
-    Column("annual_to", Integer),
-    Column("job_group_id", Integer),
-    Column("category_tag_id", Integer),
-    Column("is_active", Boolean, default=True),
-    Column("created_at", DateTime),
-    Column("synced_at", DateTime, nullable=False),
-    Column("updated_at", DateTime),
-)
+class Base(DeclarativeBase):
+    pass
 
-applications_table = Table(
-    "applications", metadata,
-    Column("id", Integer, primary_key=True),
-    Column("job_id", Integer, nullable=False),
-    Column("status", String(50), nullable=False),
-    Column("apply_time", DateTime),
-    Column("synced_at", DateTime, nullable=False),
-)
 
-search_presets_table = Table(
-    "search_presets", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", String(100), nullable=False, unique=True),
-    Column("params", JSON, nullable=False),
-    Column("created_at", DateTime, nullable=False),
-)
+class Job(Base):
+    __tablename__ = "jobs"
 
-job_details_table = Table(
-    "job_details", metadata,
-    Column("job_id", Integer, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True),
-    Column("requirements", Text),
-    Column("preferred_points", Text),
-    Column("skill_tags", JSON),
-    Column("fetched_at", DateTime, nullable=False),
-)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    location: Mapped[Optional[str]] = mapped_column(String(100))
+    employment_type: Mapped[Optional[str]] = mapped_column(String(50))
+    annual_from: Mapped[Optional[int]] = mapped_column(Integer)
+    annual_to: Mapped[Optional[int]] = mapped_column(Integer)
+    job_group_id: Mapped[Optional[int]] = mapped_column(Integer)
+    category_tag_id: Mapped[Optional[int]] = mapped_column(Integer)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    detail: Mapped[Optional["JobDetail"]] = relationship(back_populates="job", uselist=False)
+    applications: Mapped[List["Application"]] = relationship(back_populates="job")
+
+
+class Application(Base):
+    __tablename__ = "applications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    apply_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    job: Mapped[Optional["Job"]] = relationship(back_populates="applications")
+
+
+class JobDetail(Base):
+    __tablename__ = "job_details"
+
+    job_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    requirements: Mapped[Optional[str]] = mapped_column(Text)
+    preferred_points: Mapped[Optional[str]] = mapped_column(Text)
+    skill_tags: Mapped[Optional[list]] = mapped_column(JSON)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    job: Mapped["Job"] = relationship(back_populates="detail")
+
+
+class SearchPreset(Base):
+    __tablename__ = "search_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    params: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
