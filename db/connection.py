@@ -1,7 +1,8 @@
 import os
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from dotenv import load_dotenv
-from db.models import metadata
+from db.models import Base
 
 
 def get_engine():
@@ -14,4 +15,4 @@ def get_engine():
 
 def create_tables():
     engine = get_engine()
-    metadata.create_all(engine)
+    Base.metadata.create_all(engine)
