@@ -7,6 +7,7 @@ from tools.save_search_preset import save_search_preset
 from tools.list_search_presets import list_search_presets
 from tools.sync_job_details import sync_job_details
 from tools.get_job_candidates import get_job_candidates
+from tools.skip_jobs import skip_jobs
 
 mcp = FastMCP("wanted-jobs")
 
@@ -17,6 +18,7 @@ mcp.tool()(save_search_preset)
 mcp.tool()(list_search_presets)
 mcp.tool()(sync_job_details)
 mcp.tool()(get_job_candidates)
+mcp.tool()(skip_jobs)
 
 if __name__ == "__main__":
     create_tables()

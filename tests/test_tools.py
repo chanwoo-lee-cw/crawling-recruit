@@ -121,3 +121,18 @@ def test_sync_job_details_skips_failed_fetch():
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
     assert called_details[0].job_id == 102  # 속성 접근
+
+
+def test_skip_jobs_tool_calls_service():
+    with patch("tools.skip_jobs.get_engine"), \
+         patch("tools.skip_jobs.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.skip_jobs.return_value = "2개 공고 제외 완료 (사유: 연봉 낮음)"
+        MockService.return_value = mock_service
+
+        from tools.skip_jobs import skip_jobs
+        result = skip_jobs(job_ids=[101, 102], reason="연봉 낮음")
+
+    mock_service.skip_jobs.assert_called_once_with([101, 102], "연봉 낮음")
+    assert "2개 공고 제외 완료" in result
