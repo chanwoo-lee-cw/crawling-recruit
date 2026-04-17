@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from services.job_service import JobService
 
 
@@ -22,6 +22,13 @@ RAW_APP = {
     "job_id": 2001,
     "status": "complete",
     "apply_time": "2026-01-01T00:00:00",
+}
+
+RAW_DETAIL = {
+    "job_id": 1001,
+    "requirements": "Python 3년 이상",
+    "preferred_points": "FastAPI 경험자 우대",
+    "skill_tags": [{"tag_type_id": 1554, "text": "Python"}],
 }
 
 
@@ -48,22 +55,21 @@ def test_parse_application_row():
 
 def test_upsert_jobs_calls_execute():
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
-    # First execute() is the pre-query for existing IDs → returns empty (all new)
-    pre_query_result = MagicMock()
-    pre_query_result.scalars.return_value.all.return_value = []
-    # Second execute() is the upsert → rowcount=1
-    upsert_result = MagicMock()
-    upsert_result.rowcount = 1
-    mock_conn.execute.side_effect = [pre_query_result, upsert_result]
+        mock_session.scalars.return_value.all.return_value = []  # existing_ids → empty (all new)
+        upsert_result = MagicMock()
+        upsert_result.rowcount = 1
+        mock_session.execute.return_value = upsert_result
 
-    service = JobService(engine=mock_engine)
-    result = service.upsert_jobs([RAW_JOB], full_sync=False)
+        service = JobService(engine=mock_engine)
+        result = service.upsert_jobs([RAW_JOB], full_sync=False)
 
-    assert mock_conn.execute.call_count == 2
+    assert mock_session.scalars.called
+    assert mock_session.execute.called
     assert "동기화 완료: 신규 1개, 변경 0개, 유지 0개" == result
 
 
@@ -75,74 +81,70 @@ def test_save_preset_invalid_key():
 
 def test_save_preset_valid():
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
-    service = JobService(engine=mock_engine)
-    result = service.save_preset("백엔드 신입 서울", {"job_group_id": 518, "locations": "서울"})
+        service = JobService(engine=mock_engine)
+        result = service.save_preset("백엔드 신입 서울", {"job_group_id": 518, "locations": "서울"})
 
     assert "저장 완료" in result
 
 
 def test_get_unapplied_jobs_returns_markdown():
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
-    mock_conn.execute.return_value.mappings.return_value.all.return_value = [
-        {"id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
-         "location": "서울", "employment_type": "regular"}
-    ]
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {"id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+             "location": "서울", "employment_type": "regular"}
+        ]
 
-    service = JobService(engine=mock_engine)
-    result = service.get_unapplied_jobs()
+        service = JobService(engine=mock_engine)
+        result = service.get_unapplied_jobs()
 
     assert "| 회사명 |" in result
     assert "테스트컴퍼니" in result
     assert "https://www.wanted.co.kr/wd/1001" in result
 
 
-RAW_DETAIL = {
-    "job_id": 1001,
-    "requirements": "Python 3년 이상",
-    "preferred_points": "FastAPI 경험자 우대",
-    "skill_tags": [{"tag_type_id": 1554, "text": "Python"}],
-}
-
-
 def test_upsert_job_details_calls_execute():
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-    mock_conn.execute.return_value = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session.execute.return_value = MagicMock()
 
-    service = JobService(engine=mock_engine)
-    result = service.upsert_job_details([RAW_DETAIL])
+        service = JobService(engine=mock_engine)
+        result = service.upsert_job_details([RAW_DETAIL])
 
-    assert mock_conn.execute.called
+    assert mock_session.execute.called
     assert "1개 처리" in result
 
 
 def test_get_unapplied_job_rows_returns_list():
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
-    mock_conn.execute.return_value.mappings.return_value.all.return_value = [
-        {
-            "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
-            "location": "서울", "employment_type": "regular",
-            "requirements": None, "preferred_points": None,
-            "skill_tags": None, "fetched_at": None,
-        }
-    ]
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {
+                "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+                "location": "서울", "employment_type": "regular",
+                "requirements": None, "preferred_points": None,
+                "skill_tags": None, "fetched_at": None,
+            }
+        ]
 
-    service = JobService(engine=mock_engine)
-    rows = service.get_unapplied_job_rows()
+        service = JobService(engine=mock_engine)
+        rows = service.get_unapplied_job_rows()
 
     assert isinstance(rows, list)
     assert rows[0]["id"] == 1001
@@ -150,45 +152,35 @@ def test_get_unapplied_job_rows_returns_list():
 
 
 def test_get_jobs_without_details_filters_existing():
-    """job_ids 전달 시 이미 detail 있는 것 제외, limit 적용"""
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-    # job_id 101은 이미 존재
-    mock_conn.execute.return_value.scalars.return_value.all.return_value = [101]
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session.scalars.return_value.all.return_value = [101]
 
-    service = JobService(engine=mock_engine)
-    result = service.get_jobs_without_details(job_ids=[101, 102, 103], limit=2)
+        service = JobService(engine=mock_engine)
+        result = service.get_jobs_without_details(job_ids=[101, 102, 103], limit=2)
 
-    # 전체 [101, 102, 103] 중 101은 이미 있으므로 [102, 103] → limit=2 적용 → [102, 103]
     assert result == [102, 103]
 
 
 def test_get_jobs_without_details_no_job_ids():
-    """job_ids 없을 때 SQL로 전체 조회 (LIMIT 바운드 파라미터)"""
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-    mock_conn.execute.return_value.scalars.return_value.all.return_value = [201, 202]
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session.scalars.return_value.all.return_value = [201, 202]
 
-    service = JobService(engine=mock_engine)
-    result = service.get_jobs_without_details(limit=10)
+        service = JobService(engine=mock_engine)
+        result = service.get_jobs_without_details(limit=10)
 
     assert result == [201, 202]
-    call_kwargs = mock_conn.execute.call_args
-    assert call_kwargs is not None
 
 
 def test_get_recommended_jobs_scores_skill_tags():
-    """skill_tags 매칭 수 기준으로 상위 N개 반환, detail 없는 공고 제외"""
     mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
-
-    from datetime import datetime
     now = datetime.now()
     all_rows = [
         {
@@ -209,7 +201,7 @@ def test_get_recommended_jobs_scores_skill_tags():
             "id": 3, "company_name": "C사", "title": "Fullstack",
             "location": "서울", "employment_type": "regular",
             "requirements": None, "preferred_points": None,
-            "skill_tags": None, "fetched_at": None,  # detail 없음
+            "skill_tags": None, "fetched_at": None,
         },
     ]
 
@@ -220,9 +212,7 @@ def test_get_recommended_jobs_scores_skill_tags():
         top_k=15,
     )
 
-    # detail 없는 공고(id=3)는 제외
     assert len(candidates) == 2
-    # 점수 높은 순 (Python+AWS 매칭 2개 > React 매칭 0개)
     assert candidates[0]["id"] == 1
     assert candidates[1]["id"] == 2
     assert all(c["fetched_at"] is not None for c in candidates)

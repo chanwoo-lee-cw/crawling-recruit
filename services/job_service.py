@@ -1,9 +1,10 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import text, select
+from sqlalchemy import select, update, text
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.orm import Session
 
-from db.models import jobs_table, applications_table, search_presets_table, job_details_table
+from db.models import Job, Application, JobDetail, SearchPreset
 
 ALLOWED_PRESET_KEYS = {"job_group_id", "job_ids", "years", "locations", "limit_pages"}
 
@@ -64,14 +65,13 @@ class JobService:
         rows = [self._parse_job(j) for j in raw_jobs]
         synced_ids = {r["id"] for r in rows}
 
-        with self.engine.connect() as conn:
-            # Count pre-existing rows to distinguish inserts from updates
-            existing_ids = set(conn.execute(
-                select(jobs_table.c.id).where(jobs_table.c.id.in_(synced_ids))
-            ).scalars().all())
+        with Session(self.engine) as session:
+            existing_ids = set(session.scalars(
+                select(Job.id).where(Job.id.in_(synced_ids))
+            ).all())
             new_count = len(synced_ids - existing_ids)
 
-            stmt = insert(jobs_table).values(rows)
+            stmt = insert(Job.__table__).values(rows)
             update_dict = {
                 "company_name": stmt.inserted.company_name,
                 "title": stmt.inserted.title,
@@ -89,20 +89,18 @@ class JobService:
                 ),
             }
             upsert_stmt = stmt.on_duplicate_key_update(**update_dict)
-            result = conn.execute(upsert_stmt)
-            conn.commit()
+            result = session.execute(upsert_stmt)
+            session.commit()
 
-            # full_sync일 때 비활성화 처리
             if full_sync and synced_ids:
-                conn.execute(
-                    jobs_table.update()
-                    .where(jobs_table.c.id.not_in(synced_ids))
-                    .where(jobs_table.c.is_active == True)
+                session.execute(
+                    update(Job)
+                    .where(Job.id.not_in(synced_ids))
+                    .where(Job.is_active == True)
                     .values(is_active=False)
                 )
-                conn.commit()
+                session.commit()
 
-            # rowcount = new_count*1 + updated*2 + unchanged*0
             updated_count = (result.rowcount - new_count) // 2
             unchanged_count = len(rows) - new_count - updated_count
             return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
@@ -113,14 +111,14 @@ class JobService:
 
         rows = [self._parse_application(a) for a in raw_apps]
 
-        with self.engine.connect() as conn:
-            stmt = insert(applications_table).values(rows)
+        with Session(self.engine) as session:
+            stmt = insert(Application.__table__).values(rows)
             upsert_stmt = stmt.on_duplicate_key_update(
                 status=stmt.inserted.status,
                 synced_at=stmt.inserted.synced_at,
             )
-            conn.execute(upsert_stmt)
-            conn.commit()
+            session.execute(upsert_stmt)
+            session.commit()
 
         return f"지원현황 동기화 완료: 총 {len(rows)}건"
 
@@ -138,16 +136,16 @@ class JobService:
             }
             for d in details
         ]
-        with self.engine.connect() as conn:
-            stmt = insert(job_details_table).values(rows)
+        with Session(self.engine) as session:
+            stmt = insert(JobDetail.__table__).values(rows)
             upsert_stmt = stmt.on_duplicate_key_update(
                 requirements=stmt.inserted.requirements,
                 preferred_points=stmt.inserted.preferred_points,
                 skill_tags=stmt.inserted.skill_tags,
                 fetched_at=stmt.inserted.fetched_at,
             )
-            conn.execute(upsert_stmt)
-            conn.commit()
+            session.execute(upsert_stmt)
+            session.commit()
         return f"완료: {len(rows)}개 처리"
 
     def get_jobs_without_details(
@@ -155,36 +153,25 @@ class JobService:
         job_ids: list[int] | None = None,
         limit: int | None = None,
     ) -> list[int]:
-        """job_details가 없는 공고의 job_id 목록 반환."""
         if job_ids is not None:
-            with self.engine.connect() as conn:
-                existing = set(conn.execute(
-                    select(job_details_table.c.job_id).where(
-                        job_details_table.c.job_id.in_(job_ids)
-                    )
-                ).scalars().all())
+            with Session(self.engine) as session:
+                existing = set(session.scalars(
+                    select(JobDetail.job_id).where(JobDetail.job_id.in_(job_ids))
+                ).all())
             missing = [jid for jid in job_ids if jid not in existing]
             return missing[:limit] if limit is not None else missing
-        # Use bound parameters for LIMIT (SQL injection prevention)
+
+        stmt = (
+            select(Job.id)
+            .outerjoin(JobDetail, Job.id == JobDetail.job_id)
+            .where(JobDetail.job_id.is_(None))
+            .where(Job.is_active.is_(True))
+            .order_by(Job.id)
+        )
         if limit is not None:
-            query = text("""
-                SELECT j.id FROM jobs j
-                LEFT JOIN job_details jd ON j.id = jd.job_id
-                WHERE jd.job_id IS NULL AND j.is_active = TRUE
-                ORDER BY j.id
-                LIMIT :limit
-            """)
-            params = {"limit": limit}
-        else:
-            query = text("""
-                SELECT j.id FROM jobs j
-                LEFT JOIN job_details jd ON j.id = jd.job_id
-                WHERE jd.job_id IS NULL AND j.is_active = TRUE
-                ORDER BY j.id
-            """)
-            params = {}
-        with self.engine.connect() as conn:
-            return list(conn.execute(query, params).scalars().all())
+            stmt = stmt.limit(limit)
+        with Session(self.engine) as session:
+            return list(session.scalars(stmt).all())
 
     def get_unapplied_jobs(
         self,
@@ -193,25 +180,22 @@ class JobService:
         employment_type: str | None = None,
         limit: int = 20,
     ) -> str:
-        query = text("""
-            SELECT j.id, j.company_name, j.title, j.location, j.employment_type
-            FROM jobs j
-            LEFT JOIN applications a ON j.id = a.job_id
-            WHERE a.job_id IS NULL
-              AND j.is_active = TRUE
-              AND (:job_group_id IS NULL OR j.job_group_id = :job_group_id)
-              AND (:location IS NULL OR j.location LIKE CONCAT('%', :location, '%'))
-              AND (:employment_type IS NULL OR j.employment_type = :employment_type)
-            LIMIT :limit
-        """)
+        stmt = (
+            select(Job.id, Job.company_name, Job.title, Job.location, Job.employment_type)
+            .outerjoin(Application, Job.id == Application.job_id)
+            .where(Application.job_id.is_(None))
+            .where(Job.is_active.is_(True))
+        )
+        if job_group_id is not None:
+            stmt = stmt.where(Job.job_group_id == job_group_id)
+        if location:
+            stmt = stmt.where(Job.location.ilike(f"%{location}%"))
+        if employment_type:
+            stmt = stmt.where(Job.employment_type == employment_type)
+        stmt = stmt.limit(limit)
 
-        with self.engine.connect() as conn:
-            rows = conn.execute(query, {
-                "job_group_id": job_group_id,
-                "location": location,
-                "employment_type": employment_type,
-                "limit": limit,
-            }).mappings().all()
+        with Session(self.engine) as session:
+            rows = session.execute(stmt).mappings().all()
 
         if not rows:
             return "미지원 공고가 없습니다."
@@ -233,24 +217,27 @@ class JobService:
     ) -> list[dict]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
-        query = text("""
-            SELECT j.id, j.company_name, j.title, j.location, j.employment_type,
-                   jd.requirements, jd.preferred_points, jd.skill_tags, jd.fetched_at
-            FROM jobs j
-            LEFT JOIN applications a ON j.id = a.job_id
-            LEFT JOIN job_details jd ON j.id = jd.job_id
-            WHERE a.job_id IS NULL
-              AND j.is_active = TRUE
-              AND (:job_group_id IS NULL OR j.job_group_id = :job_group_id)
-              AND (:location IS NULL OR j.location LIKE CONCAT('%', :location, '%'))
-              AND (:employment_type IS NULL OR j.employment_type = :employment_type)
-        """)
-        with self.engine.connect() as conn:
-            rows = conn.execute(query, {
-                "job_group_id": job_group_id,
-                "location": location,
-                "employment_type": employment_type,
-            }).mappings().all()
+        stmt = (
+            select(
+                Job.id, Job.company_name, Job.title, Job.location, Job.employment_type,
+                JobDetail.requirements, JobDetail.preferred_points,
+                JobDetail.skill_tags, JobDetail.fetched_at,
+            )
+            .outerjoin(Application, Job.id == Application.job_id)
+            .outerjoin(JobDetail, Job.id == JobDetail.job_id)
+            .where(Application.job_id.is_(None))
+            .where(Job.is_active.is_(True))
+        )
+        if job_group_id is not None:
+            stmt = stmt.where(Job.job_group_id == job_group_id)
+        if location:
+            stmt = stmt.where(Job.location.ilike(f"%{location}%"))
+        if employment_type:
+            stmt = stmt.where(Job.employment_type == employment_type)
+
+        with Session(self.engine) as session:
+            rows = session.execute(stmt).mappings().all()
+
         result = []
         for r in rows:
             row = dict(r)
@@ -272,31 +259,42 @@ class JobService:
 
         row = {
             "name": name,
-            "params": json.dumps(params, ensure_ascii=False),
+            "params": params,
             "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
-        with self.engine.connect() as conn:
-            stmt = insert(search_presets_table).values([row])
+        with Session(self.engine) as session:
+            stmt = insert(SearchPreset.__table__).values([row])
             upsert_stmt = stmt.on_duplicate_key_update(
                 params=stmt.inserted.params,
                 created_at=stmt.inserted.created_at,
             )
-            conn.execute(upsert_stmt)
-            conn.commit()
+            session.execute(upsert_stmt)
+            session.commit()
 
         return f"프리셋 '{name}' 저장 완료"
 
     def list_presets(self) -> str:
-        with self.engine.connect() as conn:
-            rows = conn.execute(
-                search_presets_table.select().order_by(search_presets_table.c.created_at)
-            ).mappings().all()
+        with Session(self.engine) as session:
+            presets = session.scalars(
+                select(SearchPreset).order_by(SearchPreset.created_at)
+            ).all()
 
-        if not rows:
+        if not presets:
             return "저장된 프리셋이 없습니다."
-        names = ", ".join(r["name"] for r in rows)
+        names = ", ".join(r.name for r in presets)
         return f"저장된 프리셋: {names}"
+
+    def get_preset_params(self, name: str) -> dict | None:
+        with Session(self.engine) as session:
+            preset = session.scalars(
+                select(SearchPreset).where(SearchPreset.name == name)
+            ).first()
+
+        if not preset:
+            return None
+        params = preset.params
+        return json.loads(params) if isinstance(params, str) else params
 
     def get_recommended_jobs(
         self,
@@ -314,14 +312,3 @@ class JobService:
         with_detail = [r for r in rows if r.get("fetched_at") is not None]
         scored = sorted(with_detail, key=score, reverse=True)
         return scored[:top_k]
-
-    def get_preset_params(self, name: str) -> dict | None:
-        with self.engine.connect() as conn:
-            row = conn.execute(
-                search_presets_table.select().where(search_presets_table.c.name == name)
-            ).mappings().first()
-
-        if not row:
-            return None
-        params = row["params"]
-        return json.loads(params) if isinstance(params, str) else params
