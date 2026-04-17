@@ -8,6 +8,7 @@ from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset,
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {"job_group_id", "job_ids", "years", "locations", "limit_pages"}
+WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
 
 
 class JobService:
@@ -205,7 +206,7 @@ class JobService:
 
         lines = ["| 회사명 | 포지션 | 지역 | 링크 |", "|---|---|---|---|"]
         for row in rows:
-            link = f"https://www.wanted.co.kr/wd/{row['id']}"
+            link = f"{WANTED_JOB_BASE_URL}/{row['id']}"
             lines.append(
                 f"| {row['company_name']} | {row['title']} | {row['location']} | {link} |"
             )

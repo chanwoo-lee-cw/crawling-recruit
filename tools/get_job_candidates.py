@@ -1,6 +1,6 @@
 import json
 from db.connection import get_engine
-from services.job_service import JobService
+from services.job_service import JobService, WANTED_JOB_BASE_URL
 
 
 def get_job_candidates(
@@ -33,7 +33,7 @@ def get_job_candidates(
 
         result = [
             {
-                "job_id": c.id,
+                "url": f"{WANTED_JOB_BASE_URL}/{c.id}",
                 "company_name": c.company_name,
                 "title": c.title,
                 "location": c.location,
