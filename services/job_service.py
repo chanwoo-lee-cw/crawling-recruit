@@ -4,7 +4,7 @@ from sqlalchemy import select, update, text
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
-from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset
+from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {"job_group_id", "job_ids", "years", "locations", "limit_pages"}
@@ -184,7 +184,9 @@ class JobService:
         stmt = (
             select(Job.id, Job.company_name, Job.title, Job.location, Job.employment_type)
             .outerjoin(Application, Job.id == Application.job_id)
+            .outerjoin(JobSkip, Job.id == JobSkip.job_id)
             .where(Application.job_id.is_(None))
+            .where(JobSkip.job_id.is_(None))
             .where(Job.is_active.is_(True))
         )
         if job_group_id is not None:
@@ -226,7 +228,9 @@ class JobService:
             )
             .outerjoin(Application, Job.id == Application.job_id)
             .outerjoin(OrmJobDetail, Job.id == OrmJobDetail.job_id)
+            .outerjoin(JobSkip, Job.id == JobSkip.job_id)
             .where(Application.job_id.is_(None))
+            .where(JobSkip.job_id.is_(None))
             .where(Job.is_active.is_(True))
         )
         if job_group_id is not None:
@@ -240,6 +244,22 @@ class JobService:
             rows = session.execute(stmt).mappings().all()
 
         return [JobCandidate.from_row(r) for r in rows]
+
+    def skip_jobs(self, job_ids: list[int], reason: str | None = None) -> str:
+        if not job_ids:
+            return "제외할 공고 ID를 입력해주세요."
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        rows = [{"job_id": jid, "reason": reason, "skipped_at": now} for jid in job_ids]
+        with Session(self.engine) as session:
+            stmt = insert(JobSkip.__table__).values(rows)
+            upsert_stmt = stmt.on_duplicate_key_update(
+                reason=stmt.inserted.reason,
+                skipped_at=stmt.inserted.skipped_at,
+            )
+            session.execute(upsert_stmt)
+            session.commit()
+        suffix = f" (사유: {reason})" if reason else ""
+        return f"{len(job_ids)}개 공고 제외 완료{suffix}"
 
     def save_preset(self, name: str, params: dict) -> str:
         invalid_keys = set(params.keys()) - ALLOWED_PRESET_KEYS

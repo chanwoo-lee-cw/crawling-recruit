@@ -247,3 +247,69 @@ def test_job_candidate_from_row_handles_null_skill_tags():
     candidate = JobCandidate.from_row(row)
     assert candidate.skill_tags == []
     assert candidate.fetched_at is None
+
+
+def test_skip_jobs_calls_execute():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session.execute.return_value = MagicMock()
+
+        service = JobService(engine=mock_engine)
+        result = service.skip_jobs([101, 102], reason="연봉 낮음")
+
+    assert mock_session.execute.called
+    assert mock_session.commit.called
+    assert "2개 공고 제외 완료" in result
+    assert "연봉 낮음" in result
+
+
+def test_skip_jobs_empty_list():
+    service = JobService(engine=MagicMock())
+    result = service.skip_jobs([])
+    assert result == "제외할 공고 ID를 입력해주세요."
+
+
+def test_get_unapplied_job_rows_with_skip_join():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {
+                "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+                "location": "서울", "employment_type": "regular",
+                "requirements": None, "preferred_points": None,
+                "skill_tags": None, "fetched_at": None,
+            }
+        ]
+
+        service = JobService(engine=mock_engine)
+        rows = service.get_unapplied_job_rows()
+
+    assert isinstance(rows, list)
+    assert len(rows) == 1
+    assert rows[0].id == 1001
+
+
+def test_get_unapplied_jobs_with_skip_join():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {"id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+             "location": "서울", "employment_type": "regular"}
+        ]
+
+        service = JobService(engine=mock_engine)
+        result = service.get_unapplied_jobs()
+
+    assert "테스트컴퍼니" in result
+    assert "https://www.wanted.co.kr/wd/1001" in result
