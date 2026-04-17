@@ -4,7 +4,8 @@ from sqlalchemy import select, update, text
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
-from db.models import Job, Application, JobDetail, SearchPreset
+from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset
+from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {"job_group_id", "job_ids", "years", "locations", "limit_pages"}
 
@@ -122,22 +123,22 @@ class JobService:
 
         return f"지원현황 동기화 완료: 총 {len(rows)}건"
 
-    def upsert_job_details(self, details: list[dict]) -> str:
+    def upsert_job_details(self, details: list[JobDetail]) -> str:
         if not details:
             return "완료: 0개 처리"
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         rows = [
             {
-                "job_id": d["job_id"],
-                "requirements": d.get("requirements"),
-                "preferred_points": d.get("preferred_points"),
-                "skill_tags": d.get("skill_tags", []),
+                "job_id": d.job_id,
+                "requirements": d.requirements,
+                "preferred_points": d.preferred_points,
+                "skill_tags": d.skill_tags,
                 "fetched_at": now,
             }
             for d in details
         ]
         with Session(self.engine) as session:
-            stmt = insert(JobDetail.__table__).values(rows)
+            stmt = insert(OrmJobDetail.__table__).values(rows)
             upsert_stmt = stmt.on_duplicate_key_update(
                 requirements=stmt.inserted.requirements,
                 preferred_points=stmt.inserted.preferred_points,
@@ -156,15 +157,15 @@ class JobService:
         if job_ids is not None:
             with Session(self.engine) as session:
                 existing = set(session.scalars(
-                    select(JobDetail.job_id).where(JobDetail.job_id.in_(job_ids))
+                    select(OrmJobDetail.job_id).where(OrmJobDetail.job_id.in_(job_ids))
                 ).all())
             missing = [jid for jid in job_ids if jid not in existing]
             return missing[:limit] if limit is not None else missing
 
         stmt = (
             select(Job.id)
-            .outerjoin(JobDetail, Job.id == JobDetail.job_id)
-            .where(JobDetail.job_id.is_(None))
+            .outerjoin(OrmJobDetail, Job.id == OrmJobDetail.job_id)
+            .where(OrmJobDetail.job_id.is_(None))
             .where(Job.is_active.is_(True))
             .order_by(Job.id)
         )
@@ -214,17 +215,17 @@ class JobService:
         job_group_id: int | None = None,
         location: str | None = None,
         employment_type: str | None = None,
-    ) -> list[dict]:
+    ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
         stmt = (
             select(
                 Job.id, Job.company_name, Job.title, Job.location, Job.employment_type,
-                JobDetail.requirements, JobDetail.preferred_points,
-                JobDetail.skill_tags, JobDetail.fetched_at,
+                OrmJobDetail.requirements, OrmJobDetail.preferred_points,
+                OrmJobDetail.skill_tags, OrmJobDetail.fetched_at,
             )
             .outerjoin(Application, Job.id == Application.job_id)
-            .outerjoin(JobDetail, Job.id == JobDetail.job_id)
+            .outerjoin(OrmJobDetail, Job.id == OrmJobDetail.job_id)
             .where(Application.job_id.is_(None))
             .where(Job.is_active.is_(True))
         )
@@ -238,16 +239,7 @@ class JobService:
         with Session(self.engine) as session:
             rows = session.execute(stmt).mappings().all()
 
-        result = []
-        for r in rows:
-            row = dict(r)
-            if isinstance(row.get("skill_tags"), str):
-                try:
-                    row["skill_tags"] = json.loads(row["skill_tags"])
-                except (json.JSONDecodeError, TypeError):
-                    row["skill_tags"] = []
-            result.append(row)
-        return result
+        return [JobCandidate.from_row(r) for r in rows]
 
     def save_preset(self, name: str, params: dict) -> str:
         invalid_keys = set(params.keys()) - ALLOWED_PRESET_KEYS
@@ -299,16 +291,15 @@ class JobService:
     def get_recommended_jobs(
         self,
         skills: list[str],
-        rows: list[dict],
+        rows: list[JobCandidate],
         top_k: int = 15,
-    ) -> list[dict]:
+    ) -> list[JobCandidate]:
         """전달된 rows에서 skill_tags 매칭 점수 기준 상위 top_k개 반환 (detail 없는 공고 제외)."""
         skills_lower = {s.lower() for s in skills}
 
-        def score(row: dict) -> int:
-            tags = row.get("skill_tags") or []
-            return sum(1 for t in tags if t.get("text", "").lower() in skills_lower)
+        def score(row: JobCandidate) -> int:
+            return sum(1 for tag in row.skill_tags if tag.text.lower() in skills_lower)
 
-        with_detail = [r for r in rows if r.get("fetched_at") is not None]
+        with_detail = [r for r in rows if r.fetched_at is not None]
         scored = sorted(with_detail, key=score, reverse=True)
         return scored[:top_k]
