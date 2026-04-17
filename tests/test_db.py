@@ -1,4 +1,4 @@
-from db.models import Job, Application, JobDetail, SearchPreset
+from db.models import Job, Application, JobDetail, SearchPreset, JobSkip
 
 
 def test_models_defined():
@@ -6,6 +6,7 @@ def test_models_defined():
     assert Application.__table__ is not None
     assert JobDetail.__table__ is not None
     assert SearchPreset.__table__ is not None
+    assert JobSkip.__table__ is not None
 
 
 def test_jobs_table_columns():
@@ -30,3 +31,8 @@ def test_job_details_table_columns():
 def test_search_presets_table_columns():
     col_names = {c.name for c in SearchPreset.__table__.columns}
     assert col_names == {"id", "name", "params", "created_at"}
+
+
+def test_job_skips_table_columns():
+    col_names = {c.name for c in JobSkip.__table__.columns}
+    assert col_names == {"job_id", "reason", "skipped_at"}

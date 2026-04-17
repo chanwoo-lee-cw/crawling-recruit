@@ -28,6 +28,7 @@ class Job(Base):
 
     detail: Mapped[Optional["JobDetail"]] = relationship(back_populates="job", uselist=False)
     applications: Mapped[List["Application"]] = relationship(back_populates="job")
+    skip: Mapped[Optional["JobSkip"]] = relationship(back_populates="job", uselist=False)
 
 
 class Application(Base):
@@ -63,3 +64,15 @@ class SearchPreset(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     params: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class JobSkip(Base):
+    __tablename__ = "job_skips"
+
+    job_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    reason: Mapped[Optional[str]] = mapped_column(String(255))
+    skipped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    job: Mapped["Job"] = relationship(back_populates="skip")
