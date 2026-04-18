@@ -172,13 +172,57 @@ class JobService:
             unchanged_count = len(rows) - new_count - updated_count
             return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
 
-    def upsert_applications(self, raw_apps: list[dict]) -> str:
+    def upsert_applications(self, raw_apps: list[dict], source: str = "wanted") -> str:
         if not raw_apps:
             return "지원현황 동기화 완료: 총 0건"
 
-        rows = [self._parse_application(a) for a in raw_apps]
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         with Session(self.engine) as session:
+            if source == "wanted":
+                job_platform_ids = [app["job_id"] for app in raw_apps]
+            else:
+                job_platform_ids = [app["id"] for app in raw_apps]
+
+            job_id_map = {row.platform_id: row.internal_id for row in session.execute(
+                select(Job.platform_id, Job.internal_id)
+                .where(Job.source == source)
+                .where(Job.platform_id.in_(job_platform_ids))
+            ).all()}
+
+            rows = []
+            for app in raw_apps:
+                if source == "wanted":
+                    job_platform_id = app["job_id"]
+                    platform_id = app["id"]
+                    status = app["status"]
+                    apply_time_str = app.get("apply_time")
+                else:
+                    job_platform_id = app["id"]
+                    application = app.get("application")
+                    if not application:
+                        continue
+                    platform_id = application["id"]
+                    status = application["status"]
+                    apply_time_str = application.get("applied_at")
+
+                job_internal_id = job_id_map.get(job_platform_id)
+                if job_internal_id is None:
+                    continue
+
+                apply_time = datetime.fromisoformat(apply_time_str).replace(tzinfo=None) if apply_time_str else None
+                rows.append({
+                    "source": source,
+                    "platform_id": platform_id,
+                    "job_id": job_internal_id,
+                    "status": status,
+                    "apply_time": apply_time,
+                    "synced_at": now,
+                })
+
+            if not rows:
+                return "지원현황 동기화 완료: 총 0건"
+
             stmt = insert(Application.__table__).values(rows)
             upsert_stmt = stmt.on_duplicate_key_update(
                 status=stmt.inserted.status,

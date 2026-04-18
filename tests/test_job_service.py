@@ -47,13 +47,6 @@ def test_parse_job_row():
     assert row["is_active"] is True
 
 
-def test_parse_application_row():
-    service = JobService(engine=MagicMock())
-    row = service._parse_application(RAW_APP)
-    assert row["id"] == 9001
-    assert row["job_id"] == 2001
-    assert row["status"] == "complete"
-
 
 def test_upsert_jobs_calls_execute():
     mock_engine = MagicMock()
@@ -373,3 +366,59 @@ def test_upsert_jobs_remember_source():
         result = service.upsert_jobs([raw_remember_job], source="remember", full_sync=False)
 
     assert "동기화 완료" in result
+
+
+def test_parse_application_row_wanted():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        job_row = MagicMock()
+        job_row.platform_id = 2001
+        job_row.internal_id = 99
+        mock_session.execute.side_effect = [
+            MagicMock(**{"all.return_value": [job_row]}),  # job_id_map
+            MagicMock(),                                    # upsert
+        ]
+
+        service = JobService(engine=mock_engine)
+        result = service.upsert_applications([RAW_APP], source="wanted")
+
+    assert "1건" in result
+
+
+def test_upsert_applications_remember_source():
+    raw_app = {
+        "id": 303872,
+        "title": "System Engineer",
+        "organization": {"name": "(주)휴머스온"},
+        "application": {
+            "id": 3428290,
+            "status": "applied",
+            "applied_at": "2026-04-12T18:28:24.676+09:00",
+        },
+    }
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        job_row = MagicMock()
+        job_row.platform_id = 303872
+        job_row.internal_id = 77
+        mock_session.execute.side_effect = [
+            MagicMock(**{"all.return_value": [job_row]}),  # job_id_map
+            MagicMock(),                                    # upsert
+        ]
+
+        service = JobService(engine=mock_engine)
+        result = service.upsert_applications([raw_app], source="remember")
+
+    assert "1건" in result
+
+
+def test_upsert_applications_empty():
+    service = JobService(engine=MagicMock())
+    result = service.upsert_applications([])
+    assert "0건" in result
