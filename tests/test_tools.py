@@ -21,6 +21,7 @@ def test_sync_jobs_uses_preset_when_given():
         result = sync_jobs(preset_name="백엔드 신입")
 
     mock_service.get_preset_params.assert_called_once_with("백엔드 신입")
+    mock_service.upsert_jobs.assert_called_once()
     call_kwargs = mock_client.fetch_jobs.call_args.kwargs
     assert call_kwargs.get("job_group_id") == 519
 
@@ -136,3 +137,52 @@ def test_skip_jobs_tool_calls_service():
 
     mock_service.skip_jobs.assert_called_once_with([101, 102], "연봉 낮음")
     assert "2개 공고 제외 완료" in result
+
+
+def test_sync_jobs_remember_calls_remember_client():
+    with patch("tools.sync_jobs.get_engine"), \
+         patch("tools.sync_jobs.RememberClient") as MockRememberClient, \
+         patch("tools.sync_jobs.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.upsert_jobs.return_value = "동기화 완료: 신규 3개, 변경 0개, 유지 0개"
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        mock_client.fetch_jobs.return_value = []
+        MockRememberClient.return_value = mock_client
+
+        from tools.sync_jobs import sync_jobs
+        result = sync_jobs(
+            source="remember",
+            job_category_names=[{"level1": "SW개발", "level2": "백엔드"}],
+            min_experience=2,
+            max_experience=5,
+        )
+
+    mock_client.fetch_jobs.assert_called_once_with(
+        job_category_names=[{"level1": "SW개발", "level2": "백엔드"}],
+        min_experience=2,
+        max_experience=5,
+    )
+    mock_service.upsert_jobs.assert_called_once_with([], source="remember", full_sync=True)
+
+
+def test_sync_applications_remember_calls_remember_client():
+    with patch("tools.sync_applications.get_engine"), \
+         patch("tools.sync_applications.RememberClient") as MockRememberClient, \
+         patch("tools.sync_applications.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.upsert_applications.return_value = "지원현황 동기화 완료: 총 2건"
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        mock_client.fetch_applications.return_value = []
+        MockRememberClient.return_value = mock_client
+
+        from tools.sync_applications import sync_applications
+        result = sync_applications(source="remember")
+
+    mock_client.fetch_applications.assert_called_once()
+    mock_service.upsert_applications.assert_called_once_with([], source="remember")
