@@ -13,11 +13,11 @@ def sync_applications(source: str = "wanted") -> str:
         try:
             client = RememberClient()
             apps = client.fetch_applications()
-        except PermissionError as e:
+            return service.upsert_applications(apps, source="remember")
+        except (PermissionError, ValueError) as e:
             return str(e)
-        except ValueError as e:
-            return str(e)
-        return service.upsert_applications(apps, source="remember")
+        except Exception as e:
+            return f"오류가 발생했습니다: {e}"
 
     try:
         client = WantedClient()

@@ -17,8 +17,16 @@ class RememberClient:
     def _auth_headers(self) -> dict:
         headers = {}
         if self._cookie:
+            try:
+                self._cookie.encode("ascii")
+            except UnicodeEncodeError:
+                raise ValueError("REMEMBER_COOKIE 값에 한글이 포함되어 있습니다. .env에 실제 브라우저 쿠키 값을 붙여넣어 주세요.")
             headers["Cookie"] = self._cookie
         if self._auth_token:
+            try:
+                self._auth_token.encode("ascii")
+            except UnicodeEncodeError:
+                raise ValueError("REMEMBER_AUTH_TOKEN 값에 한글이 포함되어 있습니다. .env에 실제 토큰 값을 붙여넣어 주세요.")
             headers["Authorization"] = f"Token token={self._auth_token}"
         return headers
 
@@ -57,8 +65,8 @@ class RememberClient:
         return all_jobs
 
     def fetch_applications(self) -> list[dict]:
-        if not self._cookie:
-            raise ValueError("REMEMBER_COOKIE가 .env에 설정되지 않았습니다.")
+        if not self._cookie and not self._auth_token:
+            raise ValueError("REMEMBER_COOKIE 또는 REMEMBER_AUTH_TOKEN이 .env에 설정되지 않았습니다.")
 
         all_apps = []
         page = 1
