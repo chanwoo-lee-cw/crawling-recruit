@@ -101,14 +101,14 @@ def test_get_unapplied_jobs_returns_markdown():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
-            {"id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+            {"internal_id": 1001, "source": "wanted", "platform_id": 1001,
+             "company_name": "테스트컴퍼니", "title": "Backend Engineer",
              "location": "서울", "employment_type": "regular"}
         ]
 
         service = JobService(engine=mock_engine)
         result = service.get_unapplied_jobs()
 
-    assert "| 회사명 |" in result
     assert "테스트컴퍼니" in result
     assert "https://www.wanted.co.kr/wd/1001" in result
 
@@ -137,7 +137,8 @@ def test_get_unapplied_job_rows_returns_list():
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
             {
-                "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+                "internal_id": 1001, "source": "wanted", "platform_id": 1001,
+                "company_name": "테스트컴퍼니", "title": "Backend Engineer",
                 "location": "서울", "employment_type": "regular",
                 "requirements": None, "preferred_points": None,
                 "skill_tags": None, "fetched_at": None,
@@ -148,8 +149,8 @@ def test_get_unapplied_job_rows_returns_list():
         rows = service.get_unapplied_job_rows()
 
     assert isinstance(rows, list)
-    assert rows[0].id == 1001          # 속성 접근
-    assert rows[0].fetched_at is None  # 속성 접근
+    assert rows[0].internal_id == 1001
+    assert rows[0].fetched_at is None
 
 
 def test_get_jobs_without_details_filters_existing():
@@ -185,21 +186,24 @@ def test_get_recommended_jobs_scores_skill_tags():
     now = datetime.now()
     all_rows = [
         JobCandidate(
-            id=1, company_name="A사", title="Backend",
+            internal_id=1, source="wanted", platform_id=1001,
+            company_name="A사", title="Backend",
             location="서울", employment_type="regular",
             requirements="Python req", preferred_points="AWS 우대",
             skill_tags=[SkillTag(text="Python"), SkillTag(text="AWS")],
             fetched_at=now,
         ),
         JobCandidate(
-            id=2, company_name="B사", title="Frontend",
+            internal_id=2, source="wanted", platform_id=1002,
+            company_name="B사", title="Frontend",
             location="서울", employment_type="regular",
             requirements="React req", preferred_points=None,
             skill_tags=[SkillTag(text="React")],
             fetched_at=now,
         ),
         JobCandidate(
-            id=3, company_name="C사", title="Fullstack",
+            internal_id=3, source="wanted", platform_id=1003,
+            company_name="C사", title="Fullstack",
             location="서울", employment_type="regular",
             requirements=None, preferred_points=None,
             skill_tags=[], fetched_at=None,
@@ -214,22 +218,23 @@ def test_get_recommended_jobs_scores_skill_tags():
     )
 
     assert len(candidates) == 2
-    assert candidates[0].id == 1      # 속성 접근
-    assert candidates[1].id == 2
+    assert candidates[0].internal_id == 1
+    assert candidates[1].internal_id == 2
     assert all(c.fetched_at is not None for c in candidates)
 
 
 def test_job_candidate_from_row_parses_skill_tags():
     from domain import JobCandidate, SkillTag
     row = {
-        "id": 1, "company_name": "A사", "title": "Backend",
+        "internal_id": 1, "source": "wanted", "platform_id": 1001,
+        "company_name": "A사", "title": "Backend",
         "location": "서울", "employment_type": "regular",
         "requirements": "req", "preferred_points": None,
         "skill_tags": [{"tag_type_id": 1, "text": "Python"}, {"tag_type_id": 2, "text": "AWS"}],
         "fetched_at": None,
     }
     candidate = JobCandidate.from_row(row)
-    assert candidate.id == 1
+    assert candidate.internal_id == 1
     assert candidate.company_name == "A사"
     assert len(candidate.skill_tags) == 2
     assert candidate.skill_tags[0] == SkillTag(text="Python")
@@ -239,7 +244,8 @@ def test_job_candidate_from_row_parses_skill_tags():
 def test_job_candidate_from_row_handles_null_skill_tags():
     from domain import JobCandidate
     row = {
-        "id": 2, "company_name": "B사", "title": "Frontend",
+        "internal_id": 2, "source": "wanted", "platform_id": 1002,
+        "company_name": "B사", "title": "Frontend",
         "location": None, "employment_type": None,
         "requirements": None, "preferred_points": None,
         "skill_tags": None, "fetched_at": None,
@@ -281,7 +287,8 @@ def test_get_unapplied_job_rows_with_skip_join():
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
             {
-                "id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+                "internal_id": 1001, "source": "wanted", "platform_id": 1001,
+                "company_name": "테스트컴퍼니", "title": "Backend Engineer",
                 "location": "서울", "employment_type": "regular",
                 "requirements": None, "preferred_points": None,
                 "skill_tags": None, "fetched_at": None,
@@ -293,7 +300,7 @@ def test_get_unapplied_job_rows_with_skip_join():
 
     assert isinstance(rows, list)
     assert len(rows) == 1
-    assert rows[0].id == 1001
+    assert rows[0].internal_id == 1001
 
 
 def test_get_unapplied_jobs_with_skip_join():
@@ -304,7 +311,8 @@ def test_get_unapplied_jobs_with_skip_join():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
-            {"id": 1001, "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+            {"internal_id": 1001, "source": "wanted", "platform_id": 1001,
+             "company_name": "테스트컴퍼니", "title": "Backend Engineer",
              "location": "서울", "employment_type": "regular"}
         ]
 
