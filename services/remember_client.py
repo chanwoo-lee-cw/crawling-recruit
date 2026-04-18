@@ -11,10 +11,16 @@ APPLICATIONS_URL = "https://career-api.rememberapp.co.kr/open_profiles/me/job_po
 class RememberClient:
     def __init__(self):
         self._cookie = os.getenv("REMEMBER_COOKIE")
+        self._auth_token = os.getenv("REMEMBER_AUTH_TOKEN")
 
     @property
     def _auth_headers(self) -> dict:
-        return {"Cookie": self._cookie} if self._cookie else {}
+        headers = {}
+        if self._cookie:
+            headers["Cookie"] = self._cookie
+        if self._auth_token:
+            headers["Authorization"] = f"Token token={self._auth_token}"
+        return headers
 
     def fetch_jobs(
         self,

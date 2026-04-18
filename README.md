@@ -49,6 +49,7 @@ WANTED_USER_ID=여기에_실제_user_id_입력
 
 # Remember (선택)
 REMEMBER_COOKIE=여기에_실제_쿠키_붙여넣기
+REMEMBER_AUTH_TOKEN=여기에_Token_값_입력
 ```
 
 #### Wanted 쿠키 & User ID 가져오기
@@ -59,11 +60,12 @@ REMEMBER_COOKIE=여기에_실제_쿠키_붙여넣기
 4. **Request Headers**에서 `cookie` 값 전체 복사 → `WANTED_COOKIE`에 붙여넣기
 5. **Network** 탭 → `/api/v1/applications` 요청 URL에서 `user_id=숫자` 확인 → `WANTED_USER_ID`에 입력
 
-#### Remember 쿠키 가져오기
+#### Remember 쿠키 & 토큰 가져오기
 
 1. [리멤버 커리어](https://career.rememberapp.co.kr) 로그인
 2. 개발자 도구 → **Network** 탭 → 아무 API 요청 클릭
 3. **Request Headers**에서 `cookie` 값 전체 복사 → `REMEMBER_COOKIE`에 붙여넣기
+4. **Request Headers**에서 `Authorization: Token token=xxx` 중 `xxx` 부분 복사 → `REMEMBER_AUTH_TOKEN`에 붙여넣기
 
 > **주의:** `.env` 파일은 절대 커밋하지 마세요. `.gitignore`에 이미 포함되어 있습니다.
 
