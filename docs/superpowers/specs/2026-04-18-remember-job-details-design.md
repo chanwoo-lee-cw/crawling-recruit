@@ -21,11 +21,17 @@ listing 응답에서 상세 필드 추출:
 | `preferred_qualifications` | `preferred_points` |
 | `job_categories[*].level2` (목록) | `skill_tags` (JSON 배열) |
 
-반환 딕셔너리에 `_detail` 키로 상세 정보를 포함시켜 `upsert_jobs`에 전달한다.
+파싱 시 job row 딕셔너리와 detail 딕셔너리를 분리해서 반환한다 (`_parse_remember_job`은 `(job_row, detail_row)` 튜플 반환). `insert(Job.__table__).values(rows)` 호출 시 detail 키가 섞이면 컬럼 오류가 발생하므로 반드시 분리한다.
+
+`skill_tags` 추출 로직:
+```python
+categories = raw.get("job_categories") or []
+skill_tags = [c["level2"] for c in categories if c.get("level2")]
+```
 
 ### 2. `upsert_jobs` Remember 분기 추가 (`services/job_service.py`)
 
-`source == "remember"`일 때, job upsert 완료 후 각 공고의 `internal_id`를 조회하여 `job_details` upsert 수행. `fetched_at`은 `synced_at`과 동일 값 사용.
+`source == "remember"`일 때, job upsert 완료 후 `(source, platform_id)`로 `internal_id`를 조회하여 `job_details` upsert 수행. `fetched_at`은 각 row의 `synced_at` 값을 사용한다.
 
 ### 3. 변경 없는 부분
 
