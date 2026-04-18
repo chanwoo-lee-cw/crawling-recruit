@@ -9,6 +9,7 @@ from tools.sync_job_details import sync_job_details
 from tools.get_job_candidates import get_job_candidates
 from tools.skip_jobs import skip_jobs
 from tools.migrate_db import migrate_db
+from tools.save_job_evaluations import save_job_evaluations
 
 mcp = FastMCP("wanted-jobs")
 
@@ -21,6 +22,7 @@ mcp.tool()(sync_job_details)
 mcp.tool()(get_job_candidates)
 mcp.tool()(skip_jobs)
 mcp.tool()(migrate_db)
+mcp.tool()(save_job_evaluations)
 
 if __name__ == "__main__":
     create_tables()

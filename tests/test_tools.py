@@ -223,3 +223,38 @@ def test_get_job_candidates_returns_url():
     result = json.loads(result_str)
     assert "internal_id" not in result[0]
     assert result[0]["url"] == "https://www.wanted.co.kr/wd/1001"
+
+
+def test_save_job_evaluations_tool_calls_service():
+    with patch("tools.save_job_evaluations.get_engine"), \
+         patch("tools.save_job_evaluations.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.save_job_evaluations.return_value = "2개 평가 저장 완료"
+        MockService.return_value = mock_service
+
+        from tools.save_job_evaluations import save_job_evaluations
+        result = save_job_evaluations([
+            {"job_id": 1, "verdict": "good"},
+            {"job_id": 2, "verdict": "pass"},
+        ])
+
+    assert "2개" in result
+    mock_service.save_job_evaluations.assert_called_once_with([
+        {"job_id": 1, "verdict": "good"},
+        {"job_id": 2, "verdict": "pass"},
+    ])
+
+
+def test_save_job_evaluations_tool_returns_error_on_invalid_verdict():
+    with patch("tools.save_job_evaluations.get_engine"), \
+         patch("tools.save_job_evaluations.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.save_job_evaluations.side_effect = ValueError("유효하지 않은 verdict: ['wrong']")
+        MockService.return_value = mock_service
+
+        from tools.save_job_evaluations import save_job_evaluations
+        result = save_job_evaluations([{"job_id": 1, "verdict": "wrong"}])
+
+    assert "유효하지 않은" in result
