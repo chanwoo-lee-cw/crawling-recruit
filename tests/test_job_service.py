@@ -555,7 +555,7 @@ def test_upsert_jobs_remember_detail_skill_tags():
 
     detail_row = next((r for r in captured_detail_values if "skill_tags" in r), None)
     assert detail_row is not None, "detail_rows가 insert에 전달되지 않음"
-    assert detail_row["skill_tags"] == ["백엔드", "풀스택"]
+    assert detail_row["skill_tags"] == [{"text": "백엔드"}, {"text": "풀스택"}]
 
 
 def test_parse_remember_job_fields():

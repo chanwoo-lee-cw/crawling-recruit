@@ -160,7 +160,7 @@ class JobService:
                     internal_id = internal_id_map.get(raw_job["id"])
                     if internal_id:
                         categories = raw_job.get("job_categories") or []
-                        skill_tags = [c["level2"] for c in categories if c.get("level2")]
+                        skill_tags = [{"text": c["level2"]} for c in categories if c.get("level2")]
                         detail_rows.append({
                             "job_id": internal_id,
                             "requirements": raw_job.get("qualifications"),
