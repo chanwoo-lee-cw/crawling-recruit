@@ -1,5 +1,6 @@
 # 채용공고 MCP 서버 (Wanted + Remember)
 
+superpowers+바이브 코딩으로 작성한 프로젝트
 Claude Code에서 자연어로 호출해 Wanted·Remember의 미지원 채용공고를 수집하고 추천받는 MCP 서버.  
 MCP 서버는 데이터 제공만 담당하고, 2차 추론·추천은 Claude Code가 직접 수행한다.
 
