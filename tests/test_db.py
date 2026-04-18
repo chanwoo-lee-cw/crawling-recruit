@@ -37,3 +37,14 @@ def test_search_presets_table_columns():
 def test_job_skips_table_columns():
     col_names = {c.name for c in JobSkip.__table__.columns}
     assert col_names == {"job_id", "reason", "skipped_at"}
+
+
+def test_job_evaluation_model_columns():
+    from db.models import JobEvaluation
+    cols = {c.name for c in JobEvaluation.__table__.columns}
+    assert cols == {"job_id", "verdict", "evaluated_at"}
+
+
+def test_job_model_has_evaluation_relationship():
+    from db.models import Job
+    assert hasattr(Job, "evaluation")

@@ -33,6 +33,7 @@ class Job(Base):
     detail: Mapped[Optional["JobDetail"]] = relationship(back_populates="job", uselist=False)
     applications: Mapped[List["Application"]] = relationship(back_populates="job")
     skip: Mapped[Optional["JobSkip"]] = relationship(back_populates="job", uselist=False)
+    evaluation: Mapped[Optional["JobEvaluation"]] = relationship(back_populates="job", uselist=False)
 
 
 class Application(Base):
@@ -84,3 +85,15 @@ class JobSkip(Base):
     skipped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     job: Mapped["Job"] = relationship(back_populates="skip")
+
+
+class JobEvaluation(Base):
+    __tablename__ = "job_evaluations"
+
+    job_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("jobs.internal_id", ondelete="CASCADE"), primary_key=True
+    )
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    job: Mapped["Job"] = relationship(back_populates="evaluation")
