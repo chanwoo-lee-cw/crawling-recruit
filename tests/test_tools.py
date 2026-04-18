@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from domain import JobDetail
+from constants import CRAWL_DELAY_SECONDS
 
 
 def test_sync_jobs_uses_preset_when_given():
@@ -96,7 +97,7 @@ def test_sync_job_details_processes_missing():
 
     assert "2개 처리" in result
     assert mock_client.fetch_job_detail.call_count == 2
-    mock_sleep.assert_called_once_with(1)
+    mock_sleep.assert_called_once_with(CRAWL_DELAY_SECONDS)
 
 
 def test_sync_job_details_skips_failed_fetch():
@@ -188,7 +189,7 @@ def test_sync_applications_remember_calls_remember_client():
     mock_service.upsert_applications.assert_called_once_with([], source="remember")
 
 
-def test_get_job_candidates_includes_internal_id():
+def test_get_job_candidates_returns_url():
     from domain import JobCandidate, SkillTag
     from datetime import datetime
 
@@ -219,5 +220,5 @@ def test_get_job_candidates_includes_internal_id():
 
     import json
     result = json.loads(result_str)
-    assert result[0]["internal_id"] == 42
+    assert "internal_id" not in result[0]
     assert result[0]["url"] == "https://www.wanted.co.kr/wd/1001"

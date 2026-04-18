@@ -2,6 +2,7 @@ import time
 from db.connection import get_engine
 from services.wanted_client import WantedClient
 from services.job_service import JobService
+from constants import CRAWL_DELAY_SECONDS
 
 
 def sync_job_details(
@@ -19,7 +20,7 @@ def sync_job_details(
     fetched = []
     for i, job_id in enumerate(target_ids):
         if i > 0:
-            time.sleep(1)
+            time.sleep(CRAWL_DELAY_SECONDS)
         detail = client.fetch_job_detail(job_id)
         if detail is None:
             continue

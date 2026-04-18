@@ -12,7 +12,7 @@ ALLOWED_PRESET_KEYS = {
     "job_category_names", "min_experience", "max_experience", "source",
 }
 WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
-REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job"
+REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"
 
 JOB_BASE_URLS = {
     "wanted": WANTED_JOB_BASE_URL,

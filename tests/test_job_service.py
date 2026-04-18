@@ -488,7 +488,7 @@ def test_get_unapplied_jobs_remember_url():
         service = JobService(engine=mock_engine)
         result = service.get_unapplied_jobs()
 
-    assert "https://career.rememberapp.co.kr/job/308098" in result
+    assert "https://career.rememberapp.co.kr/job/posting/308098" in result
     assert "| 99 |" in result
 
 

@@ -28,10 +28,19 @@ def migrate(engine) -> str:
         if result.fetchone():
             return "마이그레이션 이미 완료됨"
 
-        # 1. FK 제약 제거
-        conn.execute(text("ALTER TABLE applications DROP FOREIGN KEY applications_ibfk_1"))
-        conn.execute(text("ALTER TABLE job_details DROP FOREIGN KEY job_details_ibfk_1"))
-        conn.execute(text("ALTER TABLE job_skips DROP FOREIGN KEY job_skips_ibfk_1"))
+        # 1. FK 제약 제거 (존재하는 경우만)
+        def drop_fk_if_exists(table, fk_name):
+            r = conn.execute(text(
+                f"SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE "
+                f"WHERE TABLE_NAME='{table}' AND TABLE_SCHEMA=DATABASE() "
+                f"AND CONSTRAINT_NAME='{fk_name}' AND REFERENCED_TABLE_NAME IS NOT NULL"
+            ))
+            if r.fetchone():
+                conn.execute(text(f"ALTER TABLE {table} DROP FOREIGN KEY {fk_name}"))
+
+        drop_fk_if_exists("applications", "applications_ibfk_1")
+        drop_fk_if_exists("job_details", "job_details_ibfk_1")
+        drop_fk_if_exists("job_skips", "job_skips_ibfk_1")
 
         # 2. jobs: PK DROP + id를 platform_id로 rename (AUTO_INCREMENT 제거 포함)
         conn.execute(text(
