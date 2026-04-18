@@ -22,6 +22,7 @@ class RememberClient:
         min_experience: int = 0,
         max_experience: int = 10,
         per: int = 30,
+        limit_pages: int | None = None,
     ) -> list[dict]:
         all_jobs = []
         page = 1
@@ -43,6 +44,8 @@ class RememberClient:
             all_jobs.extend(data.get("data", []))
             meta = data.get("meta", {})
             if page >= meta.get("total_pages", 1):
+                break
+            if limit_pages and page >= limit_pages:
                 break
             page += 1
         return all_jobs

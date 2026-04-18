@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from domain import JobDetail
-from constants import CRAWL_DELAY_SECONDS
+from constants import CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
 
 
 def test_sync_jobs_uses_preset_when_given():
@@ -165,6 +165,7 @@ def test_sync_jobs_remember_calls_remember_client():
         job_category_names=[{"level1": "SW개발", "level2": "백엔드"}],
         min_experience=2,
         max_experience=5,
+        limit_pages=DEFAULT_LIMIT_PAGES,
     )
     mock_service.upsert_jobs.assert_called_once_with([], source="remember", full_sync=True)
 

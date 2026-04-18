@@ -2,6 +2,7 @@ from db.connection import get_engine
 from services.wanted_client import WantedClient
 from services.remember_client import RememberClient
 from services.job_service import JobService
+from constants import DEFAULT_LIMIT_PAGES
 
 
 def sync_jobs(
@@ -11,7 +12,7 @@ def sync_jobs(
     job_ids: list[int] | None = None,
     years: list[int] | None = None,
     locations: str = "all",
-    limit_pages: int | None = None,
+    limit_pages: int | None = DEFAULT_LIMIT_PAGES,
     job_category_names: list[dict] | None = None,
     min_experience: int = 0,
     max_experience: int = 10,
@@ -47,6 +48,7 @@ def sync_jobs(
             job_category_names=job_category_names,
             min_experience=min_experience,
             max_experience=max_experience,
+            limit_pages=limit_pages,
         )
         return service.upsert_jobs(jobs, source="remember", full_sync=True)
 
