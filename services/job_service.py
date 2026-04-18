@@ -411,7 +411,7 @@ class JobService:
     def save_job_evaluations(self, evaluations: list[dict]) -> str:
         if not evaluations:
             return "0개 처리"
-        invalid = [e["verdict"] for e in evaluations if e.get("verdict") not in self.VALID_VERDICTS]
+        invalid = [e.get("verdict") for e in evaluations if e.get("verdict") not in self.VALID_VERDICTS]
         if invalid:
             raise ValueError(
                 f"유효하지 않은 verdict: {invalid}. 허용 값: good, pass, skip"
