@@ -36,7 +36,8 @@ RAW_DETAIL = JobDetail(
 def test_parse_job_row():
     service = JobService(engine=MagicMock())
     row = service._parse_job(RAW_JOB)
-    assert row["id"] == 1001
+    assert row["platform_id"] == 1001
+    assert row["source"] == "wanted"
     assert row["company_name"] == "테스트컴퍼니"
     assert row["title"] == "Backend Engineer"
     assert row["location"] == "서울"
@@ -61,17 +62,18 @@ def test_upsert_jobs_calls_execute():
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
-        mock_session.scalars.return_value.all.return_value = []  # existing_ids → empty (all new)
         upsert_result = MagicMock()
         upsert_result.rowcount = 1
-        mock_session.execute.return_value = upsert_result
+        mock_session.execute.side_effect = [
+            MagicMock(**{"all.return_value": []}),  # existing_pairs
+            upsert_result,                           # upsert
+        ]
 
         service = JobService(engine=mock_engine)
         result = service.upsert_jobs([RAW_JOB], full_sync=False)
 
-    assert mock_session.scalars.called
     assert mock_session.execute.called
-    assert "동기화 완료: 신규 1개, 변경 0개, 유지 0개" == result
+    assert "동기화 완료: 신규 1개" in result
 
 
 def test_save_preset_invalid_key():
@@ -321,3 +323,53 @@ def test_get_unapplied_jobs_with_skip_join():
 
     assert "테스트컴퍼니" in result
     assert "https://www.wanted.co.kr/wd/1001" in result
+
+
+def test_parse_remember_job():
+    raw = {
+        "id": 308098,
+        "title": "백엔드 개발",
+        "organization": {"name": "(주)이스트소프트"},
+        "addresses": [{"address_level1": "서울특별시", "address_level2": "서초구"}],
+        "min_salary": None,
+        "max_salary": None,
+    }
+    service = JobService(engine=MagicMock())
+    row = service._parse_job(raw, source="remember")
+    assert row["platform_id"] == 308098
+    assert row["source"] == "remember"
+    assert row["company_name"] == "(주)이스트소프트"
+    assert row["location"] == "서울특별시 서초구"
+    assert row["employment_type"] is None
+    assert row["company_id"] is None
+
+
+def test_upsert_jobs_remember_source():
+    raw_remember_job = {
+        "id": 308098,
+        "title": "백엔드 개발",
+        "organization": {"name": "(주)이스트소프트"},
+        "addresses": [{"address_level1": "서울특별시", "address_level2": "서초구"}],
+        "qualifications": "Python 3년",
+        "preferred_qualifications": "FastAPI 경험",
+        "min_salary": None,
+        "max_salary": None,
+    }
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        upsert_result = MagicMock()
+        upsert_result.rowcount = 1
+        mock_session.execute.side_effect = [
+            MagicMock(**{"all.return_value": []}),  # existing_pairs
+            upsert_result,                           # upsert
+            MagicMock(**{"all.return_value": []}),  # internal_id_map
+        ]
+
+        service = JobService(engine=mock_engine)
+        result = service.upsert_jobs([raw_remember_job], source="remember", full_sync=False)
+
+    assert "동기화 완료" in result

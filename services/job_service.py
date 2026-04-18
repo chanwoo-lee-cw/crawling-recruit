@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import select, update, text
+from sqlalchemy import select, update, text, tuple_
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,7 @@ class JobService:
     def __init__(self, engine):
         self.engine = engine
 
-    def _parse_job(self, raw: dict) -> dict:
+    def _parse_wanted_job(self, raw: dict) -> dict:
         address = raw.get("address") or {}
         location_str = address.get("location", "")
         district = address.get("district", "")
@@ -29,12 +29,12 @@ class JobService:
 
         category_tag = raw.get("category_tag") or {}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-
         create_time = raw.get("create_time")
         created_at = datetime.fromisoformat(create_time) if create_time else None
 
         return {
-            "id": raw["id"],
+            "source": "wanted",
+            "platform_id": raw["id"],
             "company_id": raw["company"]["id"],
             "company_name": raw["company"]["name"],
             "title": raw["position"],
@@ -50,6 +50,39 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_remember_job(self, raw: dict) -> dict:
+        addresses = raw.get("addresses") or []
+        if addresses:
+            addr = addresses[0]
+            parts = [addr.get("address_level1", ""), addr.get("address_level2", "")]
+            location = " ".join(p for p in parts if p).strip() or None
+        else:
+            location = None
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        return {
+            "source": "remember",
+            "platform_id": raw["id"],
+            "company_id": None,
+            "company_name": raw["organization"]["name"],
+            "title": raw["title"],
+            "location": location,
+            "employment_type": None,
+            "annual_from": raw.get("min_salary"),
+            "annual_to": raw.get("max_salary"),
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
+    def _parse_job(self, raw: dict, source: str = "wanted") -> dict:
+        if source == "remember":
+            return self._parse_remember_job(raw)
+        return self._parse_wanted_job(raw)
+
     def _parse_application(self, raw: dict) -> dict:
         apply_time = raw.get("apply_time")
         return {
@@ -60,18 +93,19 @@ class JobService:
             "synced_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
-    def upsert_jobs(self, raw_jobs: list[dict], full_sync: bool = False) -> str:
+    def upsert_jobs(self, raw_jobs: list[dict], source: str = "wanted", full_sync: bool = False) -> str:
         if not raw_jobs:
             return "동기화 완료: 신규 0개, 변경 0개, 유지 0개"
 
-        rows = [self._parse_job(j) for j in raw_jobs]
-        synced_ids = {r["id"] for r in rows}
+        rows = [self._parse_job(j, source=source) for j in raw_jobs]
+        synced_pairs = [(source, r["platform_id"]) for r in rows]
 
         with Session(self.engine) as session:
-            existing_ids = set(session.scalars(
-                select(Job.id).where(Job.id.in_(synced_ids))
+            existing_pairs = set(session.execute(
+                select(Job.source, Job.platform_id)
+                .where(tuple_(Job.source, Job.platform_id).in_(synced_pairs))
             ).all())
-            new_count = len(synced_ids - existing_ids)
+            new_count = len(rows) - len(existing_pairs)
 
             stmt = insert(Job.__table__).values(rows)
             update_dict = {
@@ -94,14 +128,45 @@ class JobService:
             result = session.execute(upsert_stmt)
             session.commit()
 
-            if full_sync and synced_ids:
+            if full_sync and synced_pairs:
                 session.execute(
                     update(Job)
-                    .where(Job.id.not_in(synced_ids))
+                    .where(Job.source == source)
+                    .where(tuple_(Job.source, Job.platform_id).not_in(synced_pairs))
                     .where(Job.is_active == True)
                     .values(is_active=False)
                 )
                 session.commit()
+
+            if source == "remember":
+                platform_ids = [r["platform_id"] for r in rows]
+                internal_id_map = {row.platform_id: row.internal_id for row in session.execute(
+                    select(Job.platform_id, Job.internal_id)
+                    .where(Job.source == "remember")
+                    .where(Job.platform_id.in_(platform_ids))
+                ).all()}
+                now = rows[0]["synced_at"]
+                detail_rows = []
+                for raw_job in raw_jobs:
+                    internal_id = internal_id_map.get(raw_job["id"])
+                    if internal_id:
+                        detail_rows.append({
+                            "job_id": internal_id,
+                            "requirements": raw_job.get("qualifications"),
+                            "preferred_points": raw_job.get("preferred_qualifications"),
+                            "skill_tags": [],
+                            "fetched_at": now,
+                        })
+                if detail_rows:
+                    detail_stmt = insert(OrmJobDetail.__table__).values(detail_rows)
+                    detail_upsert = detail_stmt.on_duplicate_key_update(
+                        requirements=detail_stmt.inserted.requirements,
+                        preferred_points=detail_stmt.inserted.preferred_points,
+                        skill_tags=detail_stmt.inserted.skill_tags,
+                        fetched_at=detail_stmt.inserted.fetched_at,
+                    )
+                    session.execute(detail_upsert)
+                    session.commit()
 
             updated_count = (result.rowcount - new_count) // 2
             unchanged_count = len(rows) - new_count - updated_count
