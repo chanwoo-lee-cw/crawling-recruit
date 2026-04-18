@@ -12,7 +12,8 @@ def test_models_defined():
 def test_jobs_table_columns():
     col_names = {c.name for c in Job.__table__.columns}
     assert col_names == {
-        "id", "company_id", "company_name", "title", "location",
+        "internal_id", "source", "platform_id",
+        "company_id", "company_name", "title", "location",
         "employment_type", "annual_from", "annual_to", "job_group_id",
         "category_tag_id", "is_active", "created_at", "synced_at", "updated_at"
     }
@@ -20,7 +21,7 @@ def test_jobs_table_columns():
 
 def test_applications_table_columns():
     col_names = {c.name for c in Application.__table__.columns}
-    assert col_names == {"id", "job_id", "status", "apply_time", "synced_at"}
+    assert col_names == {"internal_id", "source", "platform_id", "job_id", "status", "apply_time", "synced_at"}
 
 
 def test_job_details_table_columns():

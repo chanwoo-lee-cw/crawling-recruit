@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Boolean, DateTime, JSON, Text, ForeignKey
+from sqlalchemy import Integer, String, Boolean, DateTime, JSON, Text, ForeignKey, UniqueConstraint
 
 
 class Base(DeclarativeBase):
@@ -11,8 +11,10 @@ class Base(DeclarativeBase):
 class Job(Base):
     __tablename__ = "jobs"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    internal_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="wanted")
+    platform_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    company_id: Mapped[Optional[int]] = mapped_column(Integer)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     location: Mapped[Optional[str]] = mapped_column(String(100))
@@ -26,6 +28,8 @@ class Job(Base):
     synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
+    __table_args__ = (UniqueConstraint("source", "platform_id", name="uq_source_platform"),)
+
     detail: Mapped[Optional["JobDetail"]] = relationship(back_populates="job", uselist=False)
     applications: Mapped[List["Application"]] = relationship(back_populates="job")
     skip: Mapped[Optional["JobSkip"]] = relationship(back_populates="job", uselist=False)
@@ -34,11 +38,15 @@ class Job(Base):
 class Application(Base):
     __tablename__ = "applications"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
+    internal_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="wanted")
+    platform_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.internal_id"), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     apply_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
     synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (UniqueConstraint("source", "platform_id", name="uq_app_source_platform"),)
 
     job: Mapped[Optional["Job"]] = relationship(back_populates="applications")
 
@@ -47,7 +55,7 @@ class JobDetail(Base):
     __tablename__ = "job_details"
 
     job_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+        Integer, ForeignKey("jobs.internal_id", ondelete="CASCADE"), primary_key=True
     )
     requirements: Mapped[Optional[str]] = mapped_column(Text)
     preferred_points: Mapped[Optional[str]] = mapped_column(Text)
@@ -70,7 +78,7 @@ class JobSkip(Base):
     __tablename__ = "job_skips"
 
     job_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+        Integer, ForeignKey("jobs.internal_id", ondelete="CASCADE"), primary_key=True
     )
     reason: Mapped[Optional[str]] = mapped_column(String(255))
     skipped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
