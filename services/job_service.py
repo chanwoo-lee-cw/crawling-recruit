@@ -72,7 +72,7 @@ class JobService:
         return {
             "source": "remember",
             "platform_id": raw["id"],
-            "company_id": None,
+            "company_id": raw["organization"].get("company_id"),
             "company_name": raw["organization"]["name"],
             "title": raw["title"],
             "location": location,
@@ -154,16 +154,18 @@ class JobService:
                     .where(Job.source == "remember")
                     .where(Job.platform_id.in_(platform_ids))
                 ).all()}
-                now = rows[0]["synced_at"]
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
                 detail_rows = []
                 for raw_job in raw_jobs:
                     internal_id = internal_id_map.get(raw_job["id"])
                     if internal_id:
+                        categories = raw_job.get("job_categories") or []
+                        skill_tags = [c["level2"] for c in categories if c.get("level2")]
                         detail_rows.append({
                             "job_id": internal_id,
                             "requirements": raw_job.get("qualifications"),
                             "preferred_points": raw_job.get("preferred_qualifications"),
-                            "skill_tags": [],
+                            "skill_tags": skill_tags,
                             "fetched_at": now,
                         })
                 if detail_rows:
