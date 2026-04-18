@@ -619,3 +619,46 @@ def test_save_job_evaluations_empty():
     service = JobService(engine=MagicMock())
     result = service.save_job_evaluations([])
     assert "0개" in result
+
+
+def test_get_unapplied_job_rows_accepts_include_evaluated():
+    """include_evaluated 파라미터가 오류 없이 동작해야 한다."""
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session.execute.return_value.mappings.return_value.all.return_value = []
+
+        service = JobService(engine=mock_engine)
+        rows_default = service.get_unapplied_job_rows()
+        rows_with_evaluated = service.get_unapplied_job_rows(include_evaluated=True)
+
+    assert rows_default == []
+    assert rows_with_evaluated == []
+
+
+def test_get_unapplied_job_rows_excludes_evaluated_in_sql():
+    """include_evaluated=False일 때 SQL에 job_evaluations IS NULL 조건이 포함돼야 한다."""
+    mock_engine = MagicMock()
+    captured = []
+
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        def capture_execute(stmt):
+            captured.append(stmt)
+            m = MagicMock()
+            m.mappings.return_value.all.return_value = []
+            return m
+
+        mock_session.execute.side_effect = capture_execute
+
+        service = JobService(engine=mock_engine)
+        service.get_unapplied_job_rows(include_evaluated=False)
+
+    assert len(captured) == 1
+    sql = str(captured[0])
+    assert "job_evaluations" in sql

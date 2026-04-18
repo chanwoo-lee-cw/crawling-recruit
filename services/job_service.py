@@ -352,6 +352,7 @@ class JobService:
         job_group_id: int | None = None,
         location: str | None = None,
         employment_type: str | None = None,
+        include_evaluated: bool = False,
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
@@ -370,10 +371,14 @@ class JobService:
             )
             .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
             .outerjoin(JobSkip, Job.internal_id == JobSkip.job_id)
+            .outerjoin(JobEvaluation, Job.internal_id == JobEvaluation.job_id)
             .where(tuple_(Job.company_name, Job.title).not_in(applied_pairs))
             .where(JobSkip.job_id.is_(None))
             .where(Job.is_active.is_(True))
         )
+
+        if not include_evaluated:
+            stmt = stmt.where(JobEvaluation.job_id.is_(None))
 
         if job_group_id is not None:
             stmt = stmt.where(Job.job_group_id == job_group_id)
