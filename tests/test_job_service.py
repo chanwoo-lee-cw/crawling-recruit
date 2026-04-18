@@ -579,3 +579,43 @@ def test_parse_remember_job_fields():
     assert result["company_name"] == "(주)테스트"
     assert result["location"] == "서울특별시 서초구"
     assert result["annual_from"] == 5000
+
+
+def test_save_job_evaluations_saves_rows():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession, \
+         patch("services.job_service.insert") as mock_insert:
+
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_insert_instance = MagicMock()
+        mock_insert.return_value = mock_insert_instance
+        mock_insert_instance.values.return_value = mock_insert_instance
+        mock_insert_instance.on_duplicate_key_update.return_value = mock_insert_instance
+
+        service = JobService(engine=mock_engine)
+        result = service.save_job_evaluations([
+            {"job_id": 1, "verdict": "good"},
+            {"job_id": 2, "verdict": "pass"},
+        ])
+
+    assert "2개" in result
+    mock_session.commit.assert_called_once()
+    mock_insert_instance.on_duplicate_key_update.assert_called_once()
+
+
+def test_save_job_evaluations_invalid_verdict():
+    service = JobService(engine=MagicMock())
+    try:
+        service.save_job_evaluations([{"job_id": 1, "verdict": "wrong"}])
+        assert False, "ValueError가 발생해야 함"
+    except ValueError as e:
+        assert "wrong" in str(e)
+
+
+def test_save_job_evaluations_empty():
+    service = JobService(engine=MagicMock())
+    result = service.save_job_evaluations([])
+    assert "0개" in result

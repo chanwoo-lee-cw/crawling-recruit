@@ -4,7 +4,7 @@ from sqlalchemy import select, update, text, tuple_
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
-from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip
+from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -26,6 +26,7 @@ class JobService:
         "인턴": "intern",
         "계약직": "contract",
     }
+    VALID_VERDICTS = {"good", "pass", "skip"}
 
     def __init__(self, engine):
         self.engine = engine
@@ -401,6 +402,29 @@ class JobService:
             session.commit()
         suffix = f" (사유: {reason})" if reason else ""
         return f"{len(job_ids)}개 공고 제외 완료{suffix}"
+
+    def save_job_evaluations(self, evaluations: list[dict]) -> str:
+        if not evaluations:
+            return "0개 처리"
+        invalid = [e["verdict"] for e in evaluations if e.get("verdict") not in self.VALID_VERDICTS]
+        if invalid:
+            raise ValueError(
+                f"유효하지 않은 verdict: {invalid}. 허용 값: good, pass, skip"
+            )
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        rows = [
+            {"job_id": e["job_id"], "verdict": e["verdict"], "evaluated_at": now}
+            for e in evaluations
+        ]
+        with Session(self.engine) as session:
+            stmt = insert(JobEvaluation.__table__).values(rows)
+            upsert_stmt = stmt.on_duplicate_key_update(
+                verdict=stmt.inserted.verdict,
+                evaluated_at=stmt.inserted.evaluated_at,
+            )
+            session.execute(upsert_stmt)
+            session.commit()
+        return f"{len(rows)}개 평가 저장 완료"
 
     def save_preset(self, name: str, params: dict) -> str:
         invalid_keys = set(params.keys()) - ALLOWED_PRESET_KEYS
