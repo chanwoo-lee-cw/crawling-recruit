@@ -258,3 +258,73 @@ def test_save_job_evaluations_tool_returns_error_on_invalid_verdict():
         result = save_job_evaluations([{"job_id": 1, "verdict": "wrong"}])
 
     assert "유효하지 않은" in result
+
+
+def test_get_job_candidates_includes_job_id():
+    from domain import JobCandidate, SkillTag
+    from datetime import datetime
+
+    mock_candidate = JobCandidate(
+        internal_id=42,
+        source="remember",
+        platform_id=307222,
+        company_name="랭디",
+        title="백엔드 개발자",
+        location="서울 관악구",
+        employment_type=None,
+        requirements="Kotlin 필수",
+        preferred_points=None,
+        skill_tags=[SkillTag(text="백엔드")],
+        fetched_at=datetime.now(),
+    )
+
+    with patch("tools.get_job_candidates.get_engine"), \
+         patch("tools.get_job_candidates.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.get_unapplied_job_rows.return_value = [mock_candidate]
+        mock_service.get_recommended_jobs.return_value = [mock_candidate]
+        MockService.return_value = mock_service
+
+        from tools.get_job_candidates import get_job_candidates
+        result_str = get_job_candidates(skills=["Kotlin"])
+
+    import json
+    result = json.loads(result_str)
+    assert result[0]["job_id"] == 42
+    assert result[0]["url"] == "https://career.rememberapp.co.kr/job/posting/307222"
+
+
+def test_get_job_candidates_no_new_jobs_hint():
+    """미평가 공고 없을 때 include_evaluated 힌트 메시지를 반환해야 한다."""
+    with patch("tools.get_job_candidates.get_engine"), \
+         patch("tools.get_job_candidates.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.get_unapplied_job_rows.return_value = []
+        MockService.return_value = mock_service
+
+        from tools.get_job_candidates import get_job_candidates
+        result = get_job_candidates(skills=["Python"])
+
+    assert "새로 평가할 공고가 없습니다" in result
+    assert "include_evaluated=True" in result
+
+
+def test_get_job_candidates_passes_include_evaluated():
+    with patch("tools.get_job_candidates.get_engine"), \
+         patch("tools.get_job_candidates.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.get_unapplied_job_rows.return_value = []
+        MockService.return_value = mock_service
+
+        from tools.get_job_candidates import get_job_candidates
+        get_job_candidates(skills=["Python"], include_evaluated=True)
+
+    mock_service.get_unapplied_job_rows.assert_called_once_with(
+        job_group_id=None,
+        location=None,
+        employment_type=None,
+        include_evaluated=True,
+    )
