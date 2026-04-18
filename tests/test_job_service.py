@@ -106,6 +106,7 @@ def test_get_unapplied_jobs_returns_markdown():
 
     assert "테스트컴퍼니" in result
     assert "https://www.wanted.co.kr/wd/1001" in result
+    assert "| 1001 |" in result
 
 
 def test_upsert_job_details_calls_execute():
@@ -422,3 +423,90 @@ def test_upsert_applications_empty():
     service = JobService(engine=MagicMock())
     result = service.upsert_applications([])
     assert "0건" in result
+
+
+def test_get_unapplied_job_rows_cross_platform_filter():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {
+                "internal_id": 1001, "source": "wanted", "platform_id": 1001,
+                "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+                "location": "서울", "employment_type": "regular",
+                "requirements": None, "preferred_points": None,
+                "skill_tags": None, "fetched_at": None,
+            }
+        ]
+
+        service = JobService(engine=mock_engine)
+        rows = service.get_unapplied_job_rows()
+
+    assert isinstance(rows, list)
+    assert len(rows) == 1
+    assert rows[0].internal_id == 1001
+    assert rows[0].source == "wanted"
+    assert rows[0].platform_id == 1001
+
+
+def test_get_unapplied_jobs_includes_internal_id():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {"internal_id": 42, "source": "wanted", "platform_id": 1001,
+             "company_name": "테스트컴퍼니", "title": "Backend Engineer",
+             "location": "서울", "employment_type": "regular"}
+        ]
+
+        service = JobService(engine=mock_engine)
+        result = service.get_unapplied_jobs()
+
+    assert "| 42 |" in result
+    assert "https://www.wanted.co.kr/wd/1001" in result
+
+
+def test_get_unapplied_jobs_remember_url():
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_session.execute.return_value.mappings.return_value.all.return_value = [
+            {"internal_id": 99, "source": "remember", "platform_id": 308098,
+             "company_name": "이스트소프트", "title": "백엔드 개발",
+             "location": "서울 서초구", "employment_type": None}
+        ]
+
+        service = JobService(engine=mock_engine)
+        result = service.get_unapplied_jobs()
+
+    assert "https://career.rememberapp.co.kr/job/308098" in result
+    assert "| 99 |" in result
+
+
+def test_save_preset_remember_keys():
+    service = JobService(engine=MagicMock())
+    with pytest.raises(ValueError):
+        service.save_preset("테스트", {"unknown_key": 1})
+
+    mock_engine = MagicMock()
+    with patch("services.job_service.Session") as MockSession:
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+        service = JobService(engine=mock_engine)
+        result = service.save_preset("리멤버 백엔드", {
+            "source": "remember",
+            "job_category_names": [{"level1": "SW개발", "level2": "백엔드"}],
+            "min_experience": 2,
+            "max_experience": 5,
+        })
+    assert "저장 완료" in result

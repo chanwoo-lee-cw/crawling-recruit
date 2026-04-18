@@ -7,8 +7,17 @@ from sqlalchemy.orm import Session
 from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip
 from domain import JobCandidate, JobDetail
 
-ALLOWED_PRESET_KEYS = {"job_group_id", "job_ids", "years", "locations", "limit_pages"}
+ALLOWED_PRESET_KEYS = {
+    "job_group_id", "job_ids", "years", "locations", "limit_pages",
+    "job_category_names", "min_experience", "max_experience", "source",
+}
 WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
+REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job"
+
+JOB_BASE_URLS = {
+    "wanted": WANTED_JOB_BASE_URL,
+    "remember": REMEMBER_JOB_BASE_URL,
+}
 
 
 class JobService:
@@ -273,11 +282,12 @@ class JobService:
             return missing[:limit] if limit is not None else missing
 
         stmt = (
-            select(Job.id)
-            .outerjoin(OrmJobDetail, Job.id == OrmJobDetail.job_id)
+            select(Job.internal_id)
+            .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
             .where(OrmJobDetail.job_id.is_(None))
             .where(Job.is_active.is_(True))
-            .order_by(Job.id)
+            .where(Job.source == "wanted")
+            .order_by(Job.internal_id)
         )
         if limit is not None:
             stmt = stmt.limit(limit)
@@ -291,14 +301,25 @@ class JobService:
         employment_type: str | None = None,
         limit: int = 20,
     ) -> str:
+        if employment_type:
+            employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
+
+        applied_pairs = (
+            select(Job.company_name, Job.title)
+            .join(Application, Job.internal_id == Application.job_id)
+        )
+
         stmt = (
-            select(Job.id, Job.company_name, Job.title, Job.location, Job.employment_type)
-            .outerjoin(Application, Job.id == Application.job_id)
-            .outerjoin(JobSkip, Job.id == JobSkip.job_id)
-            .where(Application.job_id.is_(None))
+            select(
+                Job.internal_id, Job.source, Job.platform_id,
+                Job.company_name, Job.title, Job.location, Job.employment_type,
+            )
+            .outerjoin(JobSkip, Job.internal_id == JobSkip.job_id)
+            .where(tuple_(Job.company_name, Job.title).not_in(applied_pairs))
             .where(JobSkip.job_id.is_(None))
             .where(Job.is_active.is_(True))
         )
+
         if job_group_id is not None:
             stmt = stmt.where(Job.job_group_id == job_group_id)
         if location:
@@ -313,11 +334,12 @@ class JobService:
         if not rows:
             return "미지원 공고가 없습니다."
 
-        lines = ["| 회사명 | 포지션 | 지역 | 링크 |", "|---|---|---|---|"]
+        lines = ["| internal_id | 회사명 | 포지션 | 지역 | 링크 |", "|---|---|---|---|---|"]
         for row in rows:
-            link = f"{WANTED_JOB_BASE_URL}/{row['id']}"
+            base_url = JOB_BASE_URLS.get(row["source"], WANTED_JOB_BASE_URL)
+            link = f"{base_url}/{row['platform_id']}"
             lines.append(
-                f"| {row['company_name']} | {row['title']} | {row['location']} | {link} |"
+                f"| {row['internal_id']} | {row['company_name']} | {row['title']} | {row['location']} | {link} |"
             )
         lines.append(f"총 {len(rows)}개의 미지원 공고")
         return "\n".join(lines)
@@ -330,19 +352,26 @@ class JobService:
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
+
+        applied_pairs = (
+            select(Job.company_name, Job.title)
+            .join(Application, Job.internal_id == Application.job_id)
+        )
+
         stmt = (
             select(
-                Job.id, Job.company_name, Job.title, Job.location, Job.employment_type,
+                Job.internal_id, Job.source, Job.platform_id,
+                Job.company_name, Job.title, Job.location, Job.employment_type,
                 OrmJobDetail.requirements, OrmJobDetail.preferred_points,
                 OrmJobDetail.skill_tags, OrmJobDetail.fetched_at,
             )
-            .outerjoin(Application, Job.id == Application.job_id)
-            .outerjoin(OrmJobDetail, Job.id == OrmJobDetail.job_id)
-            .outerjoin(JobSkip, Job.id == JobSkip.job_id)
-            .where(Application.job_id.is_(None))
+            .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
+            .outerjoin(JobSkip, Job.internal_id == JobSkip.job_id)
+            .where(tuple_(Job.company_name, Job.title).not_in(applied_pairs))
             .where(JobSkip.job_id.is_(None))
             .where(Job.is_active.is_(True))
         )
+
         if job_group_id is not None:
             stmt = stmt.where(Job.job_group_id == job_group_id)
         if location:
