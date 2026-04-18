@@ -1,6 +1,6 @@
 import json
 from db.connection import get_engine
-from services.job_service import JobService, WANTED_JOB_BASE_URL
+from services.job_service import JobService, JOB_BASE_URLS, WANTED_JOB_BASE_URL
 
 
 def get_job_candidates(
@@ -14,6 +14,7 @@ def get_job_candidates(
 
     Claude Code가 직접 추론할 수 있도록 공고 데이터만 제공.
     employment_type은 한국어("정규직", "인턴", "계약직") 또는 영어("regular", "intern", "contract") 모두 허용.
+    internal_id는 skip_jobs 툴 호출 시 사용.
     """
     try:
         engine = get_engine()
@@ -33,7 +34,8 @@ def get_job_candidates(
 
         result = [
             {
-                "url": f"{WANTED_JOB_BASE_URL}/{c.id}",
+                "internal_id": c.internal_id,
+                "url": f"{JOB_BASE_URLS.get(c.source, WANTED_JOB_BASE_URL)}/{c.platform_id}",
                 "company_name": c.company_name,
                 "title": c.title,
                 "location": c.location,

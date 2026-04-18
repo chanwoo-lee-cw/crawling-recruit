@@ -186,3 +186,38 @@ def test_sync_applications_remember_calls_remember_client():
 
     mock_client.fetch_applications.assert_called_once()
     mock_service.upsert_applications.assert_called_once_with([], source="remember")
+
+
+def test_get_job_candidates_includes_internal_id():
+    from domain import JobCandidate, SkillTag
+    from datetime import datetime
+
+    mock_candidate = JobCandidate(
+        internal_id=42,
+        source="wanted",
+        platform_id=1001,
+        company_name="테스트컴퍼니",
+        title="Backend Engineer",
+        location="서울",
+        employment_type="regular",
+        requirements="Python req",
+        preferred_points=None,
+        skill_tags=[SkillTag(text="Python")],
+        fetched_at=datetime.now(),
+    )
+
+    with patch("tools.get_job_candidates.get_engine"), \
+         patch("tools.get_job_candidates.JobService") as MockService:
+
+        mock_service = MagicMock()
+        mock_service.get_unapplied_job_rows.return_value = [mock_candidate]
+        mock_service.get_recommended_jobs.return_value = [mock_candidate]
+        MockService.return_value = mock_service
+
+        from tools.get_job_candidates import get_job_candidates
+        result_str = get_job_candidates(skills=["Python"])
+
+    import json
+    result = json.loads(result_str)
+    assert result[0]["internal_id"] == 42
+    assert result[0]["url"] == "https://www.wanted.co.kr/wd/1001"
