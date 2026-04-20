@@ -111,6 +111,23 @@ claude mcp list
 
 ---
 
+## 자동 크롤링 (cron)
+
+매일 오후 10시에 전체 파이프라인이 자동으로 실행된다. 결과는 `logs/daily_sync.log`에 기록된다.
+
+```
+sync_jobs(wanted) → sync_jobs(remember) → sync_job_details → sync_applications(wanted+remember)
+```
+
+새 소스 추가 시 `scripts/daily_sync.py`의 `SOURCES`와 `SYNC_CONFIG`에 항목을 추가하면 된다.
+
+crontab 수동 확인:
+```bash
+crontab -l | grep daily_sync
+```
+
+---
+
 ## 권장 워크플로
 
 ### 처음 설정
@@ -126,12 +143,11 @@ claude mcp list
 
 ### 이후 정기 사용
 
+자동 크롤링이 매일 22:00에 실행되므로, Claude Code에서 추천만 받으면 된다:
+
 ```
-1. sync_applications      → 새 지원 이력 반영
-2. sync_jobs              → 새 공고 수집
-3. sync_job_details       → 새 공고 상세 수집
-4. get_job_candidates     → 미평가 공고만 추천 (이미 평가한 공고 자동 제외)
-5. save_job_evaluations   → verdict 저장
+1. get_job_candidates     → 미평가 공고만 추천 (이미 평가한 공고 자동 제외)
+2. save_job_evaluations   → verdict 저장
 ```
 
 ### 이미 평가한 공고 다시 보기
@@ -181,6 +197,8 @@ crawling-recruit/
 │   ├── wanted_client.py      # Wanted API 클라이언트
 │   ├── remember_client.py    # Remember API 클라이언트
 │   └── job_service.py        # DB CRUD 및 추천 로직
+├── scripts/
+│   └── daily_sync.py         # 자동 크롤링 cron 러너
 ├── tools/
 │   ├── sync_jobs.py
 │   ├── sync_applications.py
@@ -196,6 +214,7 @@ crawling-recruit/
 │   ├── test_job_service.py
 │   ├── test_tools.py
 │   ├── test_db.py
+│   ├── test_daily_sync.py
 │   └── test_wanted_client.py
 ├── spec/                     # 도메인별 요구사항 및 설계 문서
 │   ├── jobs/
