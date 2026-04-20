@@ -7,3 +7,4 @@ __pycache__/
 doc/
 .DS_Store
 .worktrees/
+logs/
