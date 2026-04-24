@@ -36,11 +36,12 @@ class WantedClient:
         years: list[int] | None = None,
         locations: str = "all",
         limit_pages: int | None = None,
+        job_sort: str = "job.popularity_order",
     ) -> list[dict]:
         params = {
             "job_group_id": job_group_id,
             "country": "kr",
-            "job_sort": "job.popularity_order",
+            "job_sort": job_sort,
             "locations": locations,
             "limit": 20,
             "offset": 0,
