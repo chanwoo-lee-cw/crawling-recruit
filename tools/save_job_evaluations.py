@@ -1,5 +1,5 @@
 from db.connection import get_engine
-from services.job_service import JobService
+from services.jobs.job_service import JobService
 
 
 def save_job_evaluations(evaluations: list[dict]) -> str:

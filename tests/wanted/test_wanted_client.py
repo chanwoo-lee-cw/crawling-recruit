@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from services.wanted_client import WantedClient
+from services.wanted.wanted_client import WantedClient
 from domain import JobDetail
 
 
@@ -37,7 +37,7 @@ MOCK_APPS_PAGE_1 = {
 
 
 def test_fetch_jobs_single_page():
-    with patch("services.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = MOCK_JOBS_PAGE_1
@@ -60,7 +60,7 @@ def test_fetch_jobs_respects_limit_pages():
                  for i in range(20)],
         "links": {"next": "/api/next?offset=20"}
     }
-    with patch("services.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = page_with_next
@@ -80,7 +80,7 @@ def test_fetch_applications_requires_cookie():
 
 
 def test_fetch_applications_raises_on_401():
-    with patch("services.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 401
         mock_get.return_value = mock_resp
@@ -91,7 +91,7 @@ def test_fetch_applications_raises_on_401():
 
 
 def test_fetch_applications_single_page():
-    with patch("services.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = MOCK_APPS_PAGE_1
@@ -105,8 +105,8 @@ def test_fetch_applications_single_page():
 
 
 def test_retry_on_429():
-    with patch("services.wanted_client.httpx.get") as mock_get, \
-         patch("services.wanted_client.time.sleep") as mock_sleep:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get, \
+         patch("services.wanted.wanted_client.time.sleep") as mock_sleep:
         rate_limit_resp = MagicMock()
         rate_limit_resp.status_code = 429
         rate_limit_resp.headers = {}
@@ -126,8 +126,8 @@ def test_retry_on_429():
 
 
 def test_retry_exhausted_raises():
-    with patch("services.wanted_client.httpx.get") as mock_get, \
-         patch("services.wanted_client.time.sleep"):
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get, \
+         patch("services.wanted.wanted_client.time.sleep"):
         rate_limit_resp = MagicMock()
         rate_limit_resp.status_code = 429
         rate_limit_resp.headers = {}
@@ -158,7 +158,7 @@ MOCK_DETAIL_RESPONSE = {
 
 
 def test_fetch_job_detail_success():
-    with patch("services.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = MOCK_DETAIL_RESPONSE
@@ -179,7 +179,7 @@ def test_fetch_job_detail_success():
 
 
 def test_fetch_job_detail_returns_none_on_error():
-    with patch("services.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 404
         mock_get.return_value = mock_resp

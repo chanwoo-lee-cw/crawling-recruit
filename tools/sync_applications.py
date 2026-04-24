@@ -1,7 +1,8 @@
-from constants.wanted_constants import WANTED
+from services.wanted.wanted_constants import WANTED
 from db.connection import get_engine
-from services.job_service import JobService
-from services.syncer import WantedApplicationSyncer, RememberApplicationSyncer
+from services.jobs.job_service import JobService
+from services.wanted.wanted_application_syncer import WantedApplicationSyncer
+from services.remember.remember_application_syncer import RememberApplicationSyncer
 
 
 def sync_applications(source: str = WANTED) -> str:

@@ -1,6 +1,6 @@
 import json
 from db.connection import get_engine
-from services.job_service import JobService, JOB_BASE_URLS, WANTED_JOB_BASE_URL
+from services.jobs.job_service import JobService, JOB_BASE_URLS, WANTED_JOB_BASE_URL
 
 
 def get_job_candidates(

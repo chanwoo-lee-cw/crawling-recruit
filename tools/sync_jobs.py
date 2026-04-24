@@ -1,11 +1,13 @@
+from services.wanted.wanted_constants import WANTED
 from db.connection import get_engine
-from services.job_service import JobService
-from services.syncer import WantedSyncer, RememberSyncer
+from services.jobs.job_service import JobService
+from services.wanted.wanted_syncer import WantedSyncer
+from services.remember.remember_syncer import RememberSyncer
 from constants import DEFAULT_LIMIT_PAGES
 
 
 def sync_jobs(
-    source: str = "wanted",
+    source: str = WANTED,
     preset_name: str | None = None,
     job_group_id: int = 518,
     job_ids: list[int] | None = None,
@@ -19,7 +21,7 @@ def sync_jobs(
 ) -> str:
     """채용공고를 동기화한다.
 
-    source: "wanted" (기본) 또는 "remember"
+    source: WANTED (기본) 또는 "remember"
     Wanted: preset_name, job_group_id, job_ids, years, locations, limit_pages 사용
     Remember: job_category_names, min_experience, max_experience 사용
     """

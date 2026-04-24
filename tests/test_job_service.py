@@ -1,8 +1,7 @@
 import pytest
-from datetime import datetime
 from unittest.mock import MagicMock, patch
-from constants.wanted_constants import WANTED
-from services.job_service import JobService
+from services.wanted.wanted_constants import WANTED
+from services.jobs.job_service import JobService
 from domain import JobCandidate, JobDetail, SkillTag
 
 
@@ -51,7 +50,7 @@ def test_parse_job_row():
 
 def test_upsert_jobs_calls_execute():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -78,7 +77,7 @@ def test_save_preset_invalid_key():
 
 def test_save_preset_valid():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -91,7 +90,7 @@ def test_save_preset_valid():
 
 def test_get_unapplied_jobs_returns_markdown():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -112,7 +111,7 @@ def test_get_unapplied_jobs_returns_markdown():
 
 def test_upsert_job_details_calls_execute():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -127,7 +126,7 @@ def test_upsert_job_details_calls_execute():
 
 def test_get_unapplied_job_rows_returns_list():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -152,7 +151,7 @@ def test_get_unapplied_job_rows_returns_list():
 
 def test_get_jobs_without_details_filters_existing():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -166,7 +165,7 @@ def test_get_jobs_without_details_filters_existing():
 
 def test_get_jobs_without_details_no_job_ids():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -254,7 +253,7 @@ def test_job_candidate_from_row_handles_null_skill_tags():
 
 def test_skip_jobs_calls_execute():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -277,7 +276,7 @@ def test_skip_jobs_empty_list():
 
 def test_get_unapplied_job_rows_with_skip_join():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -302,7 +301,7 @@ def test_get_unapplied_job_rows_with_skip_join():
 
 def test_get_unapplied_jobs_with_skip_join():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -351,7 +350,7 @@ def test_upsert_jobs_remember_source():
         "max_salary": None,
     }
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -371,7 +370,7 @@ def test_upsert_jobs_remember_source():
 
 def test_parse_application_row_wanted():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -401,7 +400,7 @@ def test_upsert_applications_remember_source():
         },
     }
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -427,7 +426,7 @@ def test_upsert_applications_empty():
 
 def test_get_unapplied_job_rows_cross_platform_filter():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -454,7 +453,7 @@ def test_get_unapplied_job_rows_cross_platform_filter():
 
 def test_get_unapplied_jobs_includes_internal_id():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -474,7 +473,7 @@ def test_get_unapplied_jobs_includes_internal_id():
 
 def test_get_unapplied_jobs_remember_url():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -498,7 +497,7 @@ def test_save_preset_remember_keys():
         service.save_preset("테스트", {"unknown_key": 1})
 
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -538,8 +537,8 @@ def test_parse_remember_job_fields():
 
 def test_save_job_evaluations_saves_rows():
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession, \
-         patch("services.job_service.insert") as mock_insert:
+    with patch("services.jobs.job_service.Session") as MockSession, \
+         patch("services.jobs.job_service.insert") as mock_insert:
 
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -589,8 +588,8 @@ def test_upsert_remember_details_inserts_skill_tags():
     mock_engine = MagicMock()
     captured = []
 
-    with patch("services.job_service.Session") as MockSession, \
-         patch("services.job_service.insert") as mock_insert:
+    with patch("services.jobs.job_service.Session") as MockSession, \
+         patch("services.jobs.job_service.insert") as mock_insert:
 
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -616,7 +615,7 @@ def test_upsert_remember_details_inserts_skill_tags():
 def test_get_unapplied_job_rows_accepts_include_evaluated():
     """include_evaluated 파라미터가 오류 없이 동작해야 한다."""
     mock_engine = MagicMock()
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -635,7 +634,7 @@ def test_get_unapplied_job_rows_excludes_evaluated_in_sql():
     mock_engine = MagicMock()
     captured = []
 
-    with patch("services.job_service.Session") as MockSession:
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)

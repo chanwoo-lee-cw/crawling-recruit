@@ -1,6 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from services.syncer import BaseSyncer, WantedSyncer, RememberSyncer
+from services.base_syncer import BaseSyncer
+from services.wanted.wanted_syncer import WantedSyncer
+from services.remember.remember_syncer import RememberSyncer
+from services.wanted.wanted_application_syncer import WantedApplicationSyncer
+from services.remember.remember_application_syncer import RememberApplicationSyncer
 
 
 def test_base_syncer_is_abstract():
@@ -12,7 +16,7 @@ def test_wanted_syncer_calls_client_and_service():
     mock_service = MagicMock()
     mock_service.upsert_jobs.return_value = "동기화 완료: 신규 2개, 변경 0개, 유지 0개"
 
-    with patch("services.syncer.WantedClient") as MockClient:
+    with patch("services.wanted.wanted_syncer.WantedClient") as MockClient:
         mock_client = MagicMock()
         mock_client.fetch_jobs.return_value = [{"id": 1}, {"id": 2}]
         MockClient.return_value = mock_client
@@ -35,7 +39,7 @@ def test_remember_syncer_calls_client_upsert_and_details():
     mock_service = MagicMock()
     mock_service.upsert_jobs.return_value = "동기화 완료: 신규 1개, 변경 0개, 유지 0개"
 
-    with patch("services.syncer.RememberClient") as MockClient:
+    with patch("services.remember.remember_syncer.RememberClient") as MockClient:
         mock_client = MagicMock()
         mock_client.fetch_jobs.return_value = [{"id": 10}]
         MockClient.return_value = mock_client
@@ -58,14 +62,11 @@ def test_remember_syncer_returns_error_without_job_categories():
     assert "job_category_names" in result
 
 
-from services.syncer import WantedApplicationSyncer, RememberApplicationSyncer
-
-
 def test_wanted_application_syncer_calls_client_and_service():
     mock_service = MagicMock()
     mock_service.upsert_applications.return_value = "지원현황 동기화 완료: 총 3건"
 
-    with patch("services.syncer.WantedClient") as MockClient:
+    with patch("services.wanted.wanted_application_syncer.WantedClient") as MockClient:
         mock_client = MagicMock()
         mock_client.fetch_applications.return_value = [{"id": 1}, {"id": 2}, {"id": 3}]
         MockClient.return_value = mock_client
@@ -81,7 +82,7 @@ def test_wanted_application_syncer_calls_client_and_service():
 def test_wanted_application_syncer_returns_error_on_permission_error():
     mock_service = MagicMock()
 
-    with patch("services.syncer.WantedClient") as MockClient:
+    with patch("services.wanted.wanted_application_syncer.WantedClient") as MockClient:
         MockClient.return_value.fetch_applications.side_effect = PermissionError("쿠키가 만료되었습니다.")
 
         syncer = WantedApplicationSyncer(mock_service)
@@ -94,7 +95,7 @@ def test_remember_application_syncer_calls_client_and_service():
     mock_service = MagicMock()
     mock_service.upsert_applications.return_value = "지원현황 동기화 완료: 총 2건"
 
-    with patch("services.syncer.RememberClient") as MockClient:
+    with patch("services.remember.remember_application_syncer.RememberClient") as MockClient:
         mock_client = MagicMock()
         mock_client.fetch_applications.return_value = [{"id": 10}, {"id": 11}]
         MockClient.return_value = mock_client
@@ -110,7 +111,7 @@ def test_remember_application_syncer_calls_client_and_service():
 def test_remember_application_syncer_returns_error_on_permission_error():
     mock_service = MagicMock()
 
-    with patch("services.syncer.RememberClient") as MockClient:
+    with patch("services.remember.remember_application_syncer.RememberClient") as MockClient:
         MockClient.return_value.fetch_applications.side_effect = PermissionError("Remeber 쿠키 만료")
 
         syncer = RememberApplicationSyncer(mock_service)
@@ -122,7 +123,7 @@ def test_remember_application_syncer_returns_error_on_permission_error():
 def test_remember_application_syncer_catches_generic_exception():
     mock_service = MagicMock()
 
-    with patch("services.syncer.RememberClient") as MockClient:
+    with patch("services.remember.remember_application_syncer.RememberClient") as MockClient:
         MockClient.return_value.fetch_applications.side_effect = RuntimeError("네트워크 오류")
 
         syncer = RememberApplicationSyncer(mock_service)

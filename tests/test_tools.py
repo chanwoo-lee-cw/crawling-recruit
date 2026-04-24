@@ -1,12 +1,12 @@
 from unittest.mock import patch, MagicMock
 from domain import JobDetail
-from constants.constants import CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
-from constants.wanted_constants import WANTED
+from constants import CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
+from services.wanted.wanted_constants import WANTED
 
 
 def test_sync_jobs_uses_preset_when_given():
     with patch("tools.sync_jobs.get_engine") as mock_engine, \
-         patch("services.syncer.WantedClient") as mock_client_cls, \
+         patch("services.wanted.wanted_syncer.WantedClient") as mock_client_cls, \
          patch("tools.sync_jobs.JobService") as mock_service_cls:
 
         mock_service = MagicMock()
@@ -29,7 +29,7 @@ def test_sync_jobs_uses_preset_when_given():
 
 def test_sync_applications_returns_error_on_permission_error():
     with patch("tools.sync_applications.get_engine"), \
-         patch("services.syncer.WantedClient") as mock_client_cls, \
+         patch("services.wanted.wanted_application_syncer.WantedClient") as mock_client_cls, \
          patch("tools.sync_applications.JobService"):
 
         mock_client = MagicMock()
@@ -142,7 +142,7 @@ def test_skip_jobs_tool_calls_service():
 
 def test_sync_jobs_remember_calls_remember_client():
     with patch("tools.sync_jobs.get_engine"), \
-         patch("services.syncer.RememberClient") as MockRememberClient, \
+         patch("services.remember.remember_syncer.RememberClient") as MockRememberClient, \
          patch("tools.sync_jobs.JobService") as MockService:
 
         mock_service = MagicMock()
@@ -173,7 +173,7 @@ def test_sync_jobs_remember_calls_remember_client():
 
 def test_sync_applications_remember_calls_remember_client():
     with patch("tools.sync_applications.get_engine"), \
-         patch("services.syncer.RememberClient") as MockRememberClient, \
+         patch("services.remember.remember_application_syncer.RememberClient") as MockRememberClient, \
          patch("tools.sync_applications.JobService") as MockService:
 
         mock_service = MagicMock()

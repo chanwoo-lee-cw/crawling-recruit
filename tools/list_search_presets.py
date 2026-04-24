@@ -1,5 +1,5 @@
 from db.connection import get_engine
-from services.job_service import JobService
+from services.jobs.job_service import JobService
 
 
 def list_search_presets() -> str:

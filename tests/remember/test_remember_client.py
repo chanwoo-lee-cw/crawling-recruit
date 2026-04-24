@@ -26,7 +26,7 @@ SAMPLE_APPLICATION_JOB = {
 
 
 def test_fetch_jobs_success():
-    with patch("services.remember_client.httpx") as mock_httpx:
+    with patch("services.remember.remember_client.httpx") as mock_httpx:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -35,7 +35,7 @@ def test_fetch_jobs_success():
         }
         mock_httpx.post.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         jobs = client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
 
@@ -46,7 +46,7 @@ def test_fetch_jobs_success():
 
 
 def test_fetch_applications_success():
-    with patch("services.remember_client.httpx") as mock_httpx, \
+    with patch("services.remember.remember_client.httpx") as mock_httpx, \
          patch.dict("os.environ", {"REMEMBER_COOKIE": "test_cookie"}):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -56,7 +56,7 @@ def test_fetch_applications_success():
         }
         mock_httpx.get.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         apps = client.fetch_applications()
 
@@ -68,32 +68,32 @@ def test_fetch_applications_success():
 
 def test_fetch_applications_raises_on_missing_cookie():
     with patch.dict("os.environ", {}, clear=True):
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(ValueError, match="REMEMBER_COOKIE"):
             client.fetch_applications()
 
 
 def test_fetch_applications_raises_on_expired_cookie():
-    with patch("services.remember_client.httpx") as mock_httpx, \
+    with patch("services.remember.remember_client.httpx") as mock_httpx, \
          patch.dict("os.environ", {"REMEMBER_COOKIE": "expired"}):
         mock_resp = MagicMock()
         mock_resp.status_code = 401
         mock_httpx.get.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(PermissionError, match="만료"):
             client.fetch_applications()
 
 
 def test_fetch_jobs_http_error():
-    with patch("services.remember_client.httpx") as mock_httpx:
+    with patch("services.remember.remember_client.httpx") as mock_httpx:
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = Exception("500 Server Error")
         mock_httpx.post.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(Exception, match="500"):
             client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
