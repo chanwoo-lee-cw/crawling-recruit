@@ -360,7 +360,6 @@ def test_upsert_jobs_remember_source():
         mock_session.execute.side_effect = [
             MagicMock(**{"all.return_value": []}),  # existing_pairs
             upsert_result,                           # upsert
-            MagicMock(**{"all.return_value": []}),  # internal_id_map
         ]
 
         service = JobService(engine=mock_engine)
@@ -512,51 +511,6 @@ def test_save_preset_remember_keys():
     assert "저장 완료" in result
 
 
-def test_upsert_jobs_remember_detail_skill_tags():
-    """sync_jobs(remember) 시 detail insert에 skill_tags가 level2 목록으로 전달된다."""
-    raw_jobs = [
-        {
-            "id": 999,
-            "title": "백엔드 개발자",
-            "organization": {"id": 1, "name": "테스트사", "company_id": 42},
-            "addresses": [{"address_level1": "서울특별시", "address_level2": "강남구"}],
-            "min_salary": None,
-            "max_salary": None,
-            "qualifications": "Python 3년 이상",
-            "preferred_qualifications": "Django 우대",
-            "job_categories": [
-                {"id": 310, "level1": "SW개발", "level2": "백엔드"},
-                {"id": 312, "level1": "SW개발", "level2": "풀스택"},
-            ],
-        }
-    ]
-
-    mock_engine = MagicMock()
-    captured_detail_values = []
-
-    with patch("services.job_service.Session") as MockSession, \
-         patch("services.job_service.insert") as mock_insert:
-
-        mock_session = MagicMock()
-        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
-        MockSession.return_value.__exit__ = MagicMock(return_value=False)
-
-        mock_row = MagicMock()
-        mock_row.platform_id = 999
-        mock_row.internal_id = 1
-        mock_session.execute.return_value.all.side_effect = [[], [mock_row]]
-
-        mock_insert_instance = MagicMock()
-        mock_insert.return_value = mock_insert_instance
-        mock_insert_instance.values.side_effect = lambda rows: captured_detail_values.extend(rows) or mock_insert_instance
-
-        service = JobService(engine=mock_engine)
-        service.upsert_jobs(raw_jobs, source="remember", full_sync=False)
-
-    detail_row = next((r for r in captured_detail_values if "skill_tags" in r), None)
-    assert detail_row is not None, "detail_rows가 insert에 전달되지 않음"
-    assert detail_row["skill_tags"] == [{"text": "백엔드"}, {"text": "풀스택"}]
-
 
 def test_parse_remember_job_fields():
     """_parse_remember_job이 기본 필드를 올바르게 파싱한다."""
@@ -619,6 +573,43 @@ def test_save_job_evaluations_empty():
     service = JobService(engine=MagicMock())
     result = service.save_job_evaluations([])
     assert "0개" in result
+
+
+def test_upsert_remember_details_inserts_skill_tags():
+    raw_jobs = [{
+        "id": 999,
+        "qualifications": "Python 3년",
+        "preferred_qualifications": "Django 우대",
+        "job_categories": [
+            {"level1": "SW개발", "level2": "백엔드"},
+            {"level1": "SW개발", "level2": "풀스택"},
+        ],
+    }]
+    mock_engine = MagicMock()
+    captured = []
+
+    with patch("services.job_service.Session") as MockSession, \
+         patch("services.job_service.insert") as mock_insert:
+
+        mock_session = MagicMock()
+        MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+        MockSession.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_row = MagicMock()
+        mock_row.platform_id = 999
+        mock_row.internal_id = 1
+        mock_session.execute.return_value.all.return_value = [mock_row]
+
+        mock_ins = MagicMock()
+        mock_insert.return_value = mock_ins
+        mock_ins.values.side_effect = lambda rows: captured.extend(rows) or mock_ins
+        mock_ins.on_duplicate_key_update.return_value = mock_ins
+
+        service = JobService(engine=mock_engine)
+        service.upsert_remember_details(raw_jobs)
+
+    assert captured[0]["skill_tags"] == [{"text": "백엔드"}, {"text": "풀스택"}]
+    assert captured[0]["requirements"] == "Python 3년"
 
 
 def test_get_unapplied_job_rows_accepts_include_evaluated():

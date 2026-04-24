@@ -148,38 +148,6 @@ class JobService:
                 )
                 session.commit()
 
-            if source == "remember":
-                platform_ids = [r["platform_id"] for r in rows]
-                internal_id_map = {row.platform_id: row.internal_id for row in session.execute(
-                    select(Job.platform_id, Job.internal_id)
-                    .where(Job.source == "remember")
-                    .where(Job.platform_id.in_(platform_ids))
-                ).all()}
-                now = datetime.now(timezone.utc).replace(tzinfo=None)
-                detail_rows = []
-                for raw_job in raw_jobs:
-                    internal_id = internal_id_map.get(raw_job["id"])
-                    if internal_id:
-                        categories = raw_job.get("job_categories") or []
-                        skill_tags = [{"text": c["level2"]} for c in categories if c.get("level2")]
-                        detail_rows.append({
-                            "job_id": internal_id,
-                            "requirements": raw_job.get("qualifications"),
-                            "preferred_points": raw_job.get("preferred_qualifications"),
-                            "skill_tags": skill_tags,
-                            "fetched_at": now,
-                        })
-                if detail_rows:
-                    detail_stmt = insert(OrmJobDetail.__table__).values(detail_rows)
-                    detail_upsert = detail_stmt.on_duplicate_key_update(
-                        requirements=detail_stmt.inserted.requirements,
-                        preferred_points=detail_stmt.inserted.preferred_points,
-                        skill_tags=detail_stmt.inserted.skill_tags,
-                        fetched_at=detail_stmt.inserted.fetched_at,
-                    )
-                    session.execute(detail_upsert)
-                    session.commit()
-
             updated_count = (result.rowcount - new_count) // 2
             unchanged_count = len(rows) - new_count - updated_count
             return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
@@ -270,6 +238,45 @@ class JobService:
             session.execute(upsert_stmt)
             session.commit()
         return f"완료: {len(rows)}개 처리"
+
+    def upsert_remember_details(self, raw_jobs: list[dict]) -> None:
+        if not raw_jobs:
+            return
+        platform_ids = [r["id"] for r in raw_jobs]
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with Session(self.engine) as session:
+            internal_id_map = {
+                row.platform_id: row.internal_id
+                for row in session.execute(
+                    select(Job.platform_id, Job.internal_id)
+                    .where(Job.source == "remember")
+                    .where(Job.platform_id.in_(platform_ids))
+                ).all()
+            }
+            detail_rows = []
+            for raw in raw_jobs:
+                internal_id = internal_id_map.get(raw["id"])
+                if not internal_id:
+                    continue
+                categories = raw.get("job_categories") or []
+                skill_tags = [{"text": c["level2"]} for c in categories if c.get("level2")]
+                detail_rows.append({
+                    "job_id": internal_id,
+                    "requirements": raw.get("qualifications"),
+                    "preferred_points": raw.get("preferred_qualifications"),
+                    "skill_tags": skill_tags,
+                    "fetched_at": now,
+                })
+            if not detail_rows:
+                return
+            stmt = insert(OrmJobDetail.__table__).values(detail_rows)
+            session.execute(stmt.on_duplicate_key_update(
+                requirements=stmt.inserted.requirements,
+                preferred_points=stmt.inserted.preferred_points,
+                skill_tags=stmt.inserted.skill_tags,
+                fetched_at=stmt.inserted.fetched_at,
+            ))
+            session.commit()
 
     def get_jobs_without_details(
         self,
