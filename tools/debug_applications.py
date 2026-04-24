@@ -1,5 +1,5 @@
 import json
-from services.wanted_client import WantedClient
+from services.wanted.wanted_client import WantedClient
 
 
 def debug_applications() -> str:
