@@ -4,6 +4,7 @@
 
 `JobService`에 인라인으로 박혀 있는 SQLAlchemy 쿼리를 `Repository` 레이어로 분리한다.
 `JobService`는 파싱·비즈니스 로직·오케스트레이션만 담당하고, DB 쿼리는 각 Repository가 전담한다.
+아울러 `db/models.py`를 모델별 개별 파일로 분리한다.
 
 ---
 
@@ -11,7 +12,15 @@
 
 ```
 db/
-  models.py                          # 변경 없음
+  models/
+    __init__.py          # 모든 모델 re-export — 기존 import 경로 유지
+    base.py              # Base = DeclarativeBase
+    job.py               # Job
+    application.py       # Application
+    job_detail.py        # JobDetail
+    search_preset.py     # SearchPreset
+    job_skip.py          # JobSkip
+    job_evaluation.py    # JobEvaluation
   connection.py                      # 변경 없음
   repositories/
     __init__.py
@@ -24,6 +33,24 @@ db/
 services/
   jobs/
     job_service.py                   # 파싱 + 비즈니스 로직 + repo 오케스트레이션만
+```
+
+### models `__init__.py` 규칙
+
+`from db.models import Job, Application, ...` 형태의 기존 import가 변경 없이 동작하도록
+`db/models/__init__.py`에서 모든 모델을 re-export한다.
+
+```python
+# db/models/__init__.py
+from db.models.base import Base
+from db.models.job import Job
+from db.models.application import Application
+from db.models.job_detail import JobDetail
+from db.models.search_preset import SearchPreset
+from db.models.job_skip import JobSkip
+from db.models.job_evaluation import JobEvaluation
+
+__all__ = ["Base", "Job", "Application", "JobDetail", "SearchPreset", "JobSkip", "JobEvaluation"]
 ```
 
 ---
@@ -194,8 +221,9 @@ with patch("services.jobs.job_service.Session") as MockSession:
 
 ## 마이그레이션 순서
 
-1. `db/repositories/` 디렉터리 생성 및 `__init__.py`
-2. 각 Repository 클래스 구현 (쿼리 이동)
-3. `JobService` 내 인라인 쿼리를 Repository 호출로 교체
-4. Repository 단위 테스트 추가
-5. `pytest` 전체 통과 확인
+1. `db/models.py` → `db/models/` 패키지로 분리 (base, 모델 6개, __init__ re-export)
+2. `db/repositories/` 디렉터리 생성 및 `__init__.py`
+3. 각 Repository 클래스 구현 (쿼리 이동)
+4. `JobService` 내 인라인 쿼리를 Repository 호출로 교체
+5. Repository 단위 테스트 추가
+6. `pytest` 전체 통과 확인
