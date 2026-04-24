@@ -4,7 +4,8 @@ from sqlalchemy import select, update, text, tuple_
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
-from constants.wanted_constants import WANTED
+from services.wanted.wanted_constants import WANTED
+from services.remember.remember_constants import REMEMBER
 from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
 from domain import JobCandidate, JobDetail
 
@@ -17,7 +18,7 @@ REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"
 
 JOB_BASE_URLS = {
     WANTED: WANTED_JOB_BASE_URL,
-    "remember": REMEMBER_JOB_BASE_URL,
+    REMEMBER: REMEMBER_JOB_BASE_URL,
 }
 
 
@@ -72,7 +73,7 @@ class JobService:
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         return {
-            "source": "remember",
+            "source": REMEMBER,
             "platform_id": raw["id"],
             "company_id": raw["organization"].get("company_id"),
             "company_name": raw["organization"]["name"],
@@ -90,19 +91,39 @@ class JobService:
         }
 
     def _parse_job(self, raw: dict, source: str = WANTED) -> dict:
-        if source == "remember":
+        if source == REMEMBER:
             return self._parse_remember_job(raw)
         return self._parse_wanted_job(raw)
 
-    def _parse_application(self, raw: dict) -> dict:
-        apply_time = raw.get("apply_time")
-        return {
-            "id": raw["id"],
-            "job_id": raw["job_id"],
-            "status": raw["status"],
-            "apply_time": datetime.fromisoformat(apply_time) if apply_time else None,
-            "synced_at": datetime.now(timezone.utc).replace(tzinfo=None),
-        }
+    def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
+        return [
+            {
+                "job_platform_id": app["job_id"],
+                "platform_id": app["id"],
+                "status": app["status"],
+                "apply_time_str": app.get("apply_time"),
+            }
+            for app in raw_apps
+        ]
+
+    def _parse_remember_applications(self, raw_apps: list[dict]) -> list[dict]:
+        result = []
+        for app in raw_apps:
+            application = app.get("application")
+            if not application:
+                continue
+            result.append({
+                "job_platform_id": app["id"],
+                "platform_id": application["id"],
+                "status": application["status"],
+                "apply_time_str": application.get("applied_at"),
+            })
+        return result
+
+    def _parse_applications(self, raw_apps: list[dict], source: str) -> list[dict]:
+        if source == REMEMBER:
+            return self._parse_remember_applications(raw_apps)
+        return self._parse_wanted_applications(raw_apps)
 
     def upsert_jobs(self, raw_jobs: list[dict], source: str = WANTED, full_sync: bool = False) -> str:
         if not raw_jobs:
@@ -158,13 +179,14 @@ class JobService:
             return "지원현황 동기화 완료: 총 0건"
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
+        parsed = self._parse_applications(raw_apps, source)
+
+        if not parsed:
+            return "지원현황 동기화 완료: 총 0건"
+
+        job_platform_ids = [p["job_platform_id"] for p in parsed]
 
         with Session(self.engine) as session:
-            if source == WANTED:
-                job_platform_ids = [app["job_id"] for app in raw_apps]
-            else:
-                job_platform_ids = [app["id"] for app in raw_apps]
-
             job_id_map = {row.platform_id: row.internal_id for row in session.execute(
                 select(Job.platform_id, Job.internal_id)
                 .where(Job.source == source)
@@ -172,31 +194,19 @@ class JobService:
             ).all()}
 
             rows = []
-            for app in raw_apps:
-                if source == WANTED:
-                    job_platform_id = app["job_id"]
-                    platform_id = app["id"]
-                    status = app["status"]
-                    apply_time_str = app.get("apply_time")
-                else:
-                    job_platform_id = app["id"]
-                    application = app.get("application")
-                    if not application:
-                        continue
-                    platform_id = application["id"]
-                    status = application["status"]
-                    apply_time_str = application.get("applied_at")
-
-                job_internal_id = job_id_map.get(job_platform_id)
+            for p in parsed:
+                job_internal_id = job_id_map.get(p["job_platform_id"])
                 if job_internal_id is None:
                     continue
-
-                apply_time = datetime.fromisoformat(apply_time_str).replace(tzinfo=None) if apply_time_str else None
+                apply_time = (
+                    datetime.fromisoformat(p["apply_time_str"]).replace(tzinfo=None)
+                    if p["apply_time_str"] else None
+                )
                 rows.append({
                     "source": source,
-                    "platform_id": platform_id,
+                    "platform_id": p["platform_id"],
                     "job_id": job_internal_id,
-                    "status": status,
+                    "status": p["status"],
                     "apply_time": apply_time,
                     "synced_at": now,
                 })
@@ -250,7 +260,7 @@ class JobService:
                 row.platform_id: row.internal_id
                 for row in session.execute(
                     select(Job.platform_id, Job.internal_id)
-                    .where(Job.source == "remember")
+                    .where(Job.source == REMEMBER)
                     .where(Job.platform_id.in_(platform_ids))
                 ).all()
             }
