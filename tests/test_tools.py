@@ -6,7 +6,7 @@ from constants import CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
 
 def test_sync_jobs_uses_preset_when_given():
     with patch("tools.sync_jobs.get_engine") as mock_engine, \
-         patch("tools.sync_jobs.WantedClient") as mock_client_cls, \
+         patch("services.syncer.WantedClient") as mock_client_cls, \
          patch("tools.sync_jobs.JobService") as mock_service_cls:
 
         mock_service = MagicMock()
@@ -142,7 +142,7 @@ def test_skip_jobs_tool_calls_service():
 
 def test_sync_jobs_remember_calls_remember_client():
     with patch("tools.sync_jobs.get_engine"), \
-         patch("tools.sync_jobs.RememberClient") as MockRememberClient, \
+         patch("services.syncer.RememberClient") as MockRememberClient, \
          patch("tools.sync_jobs.JobService") as MockService:
 
         mock_service = MagicMock()
@@ -168,6 +168,7 @@ def test_sync_jobs_remember_calls_remember_client():
         limit_pages=DEFAULT_LIMIT_PAGES,
     )
     mock_service.upsert_jobs.assert_called_once_with([], source="remember", full_sync=True)
+    mock_service.upsert_remember_details.assert_called_once_with([])
 
 
 def test_sync_applications_remember_calls_remember_client():
