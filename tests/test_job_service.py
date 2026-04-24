@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+from constants.wanted_constants import WANTED
 from services.job_service import JobService
 from domain import JobCandidate, JobDetail, SkillTag
 
@@ -37,7 +38,7 @@ def test_parse_job_row():
     service = JobService(engine=MagicMock())
     row = service._parse_job(RAW_JOB)
     assert row["platform_id"] == 1001
-    assert row["source"] == "wanted"
+    assert row["source"] == WANTED
     assert row["company_name"] == "테스트컴퍼니"
     assert row["title"] == "Backend Engineer"
     assert row["location"] == "서울"
@@ -96,7 +97,7 @@ def test_get_unapplied_jobs_returns_markdown():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
-            {"internal_id": 1001, "source": "wanted", "platform_id": 1001,
+            {"internal_id": 1001, "source": WANTED, "platform_id": 1001,
              "company_name": "테스트컴퍼니", "title": "Backend Engineer",
              "location": "서울", "employment_type": "regular"}
         ]
@@ -133,7 +134,7 @@ def test_get_unapplied_job_rows_returns_list():
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
             {
-                "internal_id": 1001, "source": "wanted", "platform_id": 1001,
+                "internal_id": 1001, "source": WANTED, "platform_id": 1001,
                 "company_name": "테스트컴퍼니", "title": "Backend Engineer",
                 "location": "서울", "employment_type": "regular",
                 "requirements": None, "preferred_points": None,
@@ -182,7 +183,7 @@ def test_get_recommended_jobs_scores_skill_tags():
     now = datetime.now()
     all_rows = [
         JobCandidate(
-            internal_id=1, source="wanted", platform_id=1001,
+            internal_id=1, source=WANTED, platform_id=1001,
             company_name="A사", title="Backend",
             location="서울", employment_type="regular",
             requirements="Python req", preferred_points="AWS 우대",
@@ -190,7 +191,7 @@ def test_get_recommended_jobs_scores_skill_tags():
             fetched_at=now,
         ),
         JobCandidate(
-            internal_id=2, source="wanted", platform_id=1002,
+            internal_id=2, source=WANTED, platform_id=1002,
             company_name="B사", title="Frontend",
             location="서울", employment_type="regular",
             requirements="React req", preferred_points=None,
@@ -198,7 +199,7 @@ def test_get_recommended_jobs_scores_skill_tags():
             fetched_at=now,
         ),
         JobCandidate(
-            internal_id=3, source="wanted", platform_id=1003,
+            internal_id=3, source=WANTED, platform_id=1003,
             company_name="C사", title="Fullstack",
             location="서울", employment_type="regular",
             requirements=None, preferred_points=None,
@@ -222,7 +223,7 @@ def test_get_recommended_jobs_scores_skill_tags():
 def test_job_candidate_from_row_parses_skill_tags():
     from domain import JobCandidate, SkillTag
     row = {
-        "internal_id": 1, "source": "wanted", "platform_id": 1001,
+        "internal_id": 1, "source": WANTED, "platform_id": 1001,
         "company_name": "A사", "title": "Backend",
         "location": "서울", "employment_type": "regular",
         "requirements": "req", "preferred_points": None,
@@ -240,7 +241,7 @@ def test_job_candidate_from_row_parses_skill_tags():
 def test_job_candidate_from_row_handles_null_skill_tags():
     from domain import JobCandidate
     row = {
-        "internal_id": 2, "source": "wanted", "platform_id": 1002,
+        "internal_id": 2, "source": WANTED, "platform_id": 1002,
         "company_name": "B사", "title": "Frontend",
         "location": None, "employment_type": None,
         "requirements": None, "preferred_points": None,
@@ -283,7 +284,7 @@ def test_get_unapplied_job_rows_with_skip_join():
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
             {
-                "internal_id": 1001, "source": "wanted", "platform_id": 1001,
+                "internal_id": 1001, "source": WANTED, "platform_id": 1001,
                 "company_name": "테스트컴퍼니", "title": "Backend Engineer",
                 "location": "서울", "employment_type": "regular",
                 "requirements": None, "preferred_points": None,
@@ -307,7 +308,7 @@ def test_get_unapplied_jobs_with_skip_join():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
-            {"internal_id": 1001, "source": "wanted", "platform_id": 1001,
+            {"internal_id": 1001, "source": WANTED, "platform_id": 1001,
              "company_name": "테스트컴퍼니", "title": "Backend Engineer",
              "location": "서울", "employment_type": "regular"}
         ]
@@ -383,7 +384,7 @@ def test_parse_application_row_wanted():
         ]
 
         service = JobService(engine=mock_engine)
-        result = service.upsert_applications([RAW_APP], source="wanted")
+        result = service.upsert_applications([RAW_APP], source=WANTED)
 
     assert "1건" in result
 
@@ -433,7 +434,7 @@ def test_get_unapplied_job_rows_cross_platform_filter():
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
             {
-                "internal_id": 1001, "source": "wanted", "platform_id": 1001,
+                "internal_id": 1001, "source": WANTED, "platform_id": 1001,
                 "company_name": "테스트컴퍼니", "title": "Backend Engineer",
                 "location": "서울", "employment_type": "regular",
                 "requirements": None, "preferred_points": None,
@@ -447,7 +448,7 @@ def test_get_unapplied_job_rows_cross_platform_filter():
     assert isinstance(rows, list)
     assert len(rows) == 1
     assert rows[0].internal_id == 1001
-    assert rows[0].source == "wanted"
+    assert rows[0].source == WANTED
     assert rows[0].platform_id == 1001
 
 
@@ -459,7 +460,7 @@ def test_get_unapplied_jobs_includes_internal_id():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
-            {"internal_id": 42, "source": "wanted", "platform_id": 1001,
+            {"internal_id": 42, "source": WANTED, "platform_id": 1001,
              "company_name": "테스트컴퍼니", "title": "Backend Engineer",
              "location": "서울", "employment_type": "regular"}
         ]

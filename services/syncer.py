@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from constants.wanted_constants import WANTED
+from constants.remember_constants import REMEMBER
 from services.job_service import JobService
 from services.wanted_client import WantedClient
 from services.remember_client import RememberClient
@@ -37,7 +39,7 @@ class WantedSyncer(BaseSyncer):
         for job in jobs:
             if not job.get("job_group_id") and job_group_id:
                 job["job_group_id"] = job_group_id
-        return self.service.upsert_jobs(jobs, source="wanted", full_sync=full_sync)
+        return self.service.upsert_jobs(jobs, source=WANTED, full_sync=full_sync)
 
 
 class RememberSyncer(BaseSyncer):
@@ -57,6 +59,28 @@ class RememberSyncer(BaseSyncer):
             max_experience=max_experience,
             limit_pages=limit_pages,
         )
-        result = self.service.upsert_jobs(jobs, source="remember", full_sync=True)
+        result = self.service.upsert_jobs(jobs, source=REMEMBER, full_sync=True)
         self.service.upsert_remember_details(jobs)
         return result
+
+
+class WantedApplicationSyncer(BaseSyncer):
+    def sync(self) -> str:
+        try:
+            client = WantedClient()
+            apps = client.fetch_applications()
+            return self.service.upsert_applications(apps, source=WANTED)
+        except (PermissionError, ValueError) as e:
+            return str(e)
+
+
+class RememberApplicationSyncer(BaseSyncer):
+    def sync(self) -> str:
+        try:
+            client = RememberClient()
+            apps = client.fetch_applications()
+            return self.service.upsert_applications(apps, source=REMEMBER)
+        except (PermissionError, ValueError) as e:
+            return str(e)
+        except Exception as e:
+            return f"오류가 발생했습니다: {e}"

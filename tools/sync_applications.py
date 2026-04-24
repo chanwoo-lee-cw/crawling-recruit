@@ -1,29 +1,15 @@
+from constants.wanted_constants import WANTED
 from db.connection import get_engine
-from services.wanted_client import WantedClient
-from services.remember_client import RememberClient
 from services.job_service import JobService
+from services.syncer import WantedApplicationSyncer, RememberApplicationSyncer
 
 
-def sync_applications(source: str = "wanted") -> str:
-    """지원현황을 동기화한다. source: "wanted" (기본) 또는 "remember"."""
+def sync_applications(source: str = WANTED) -> str:
+    """지원현황을 동기화한다. source: WANTED (기본) 또는 "remember"."""
     engine = get_engine()
     service = JobService(engine)
 
     if source == "remember":
-        try:
-            client = RememberClient()
-            apps = client.fetch_applications()
-            return service.upsert_applications(apps, source="remember")
-        except (PermissionError, ValueError) as e:
-            return str(e)
-        except Exception as e:
-            return f"오류가 발생했습니다: {e}"
+        return RememberApplicationSyncer(service).sync()
 
-    try:
-        client = WantedClient()
-        apps = client.fetch_applications()
-    except PermissionError as e:
-        return str(e)
-    except ValueError as e:
-        return str(e)
-    return service.upsert_applications(apps, source="wanted")
+    return WantedApplicationSyncer(service).sync()

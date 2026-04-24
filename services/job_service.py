@@ -4,6 +4,7 @@ from sqlalchemy import select, update, text, tuple_
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
+from constants.wanted_constants import WANTED
 from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
 from domain import JobCandidate, JobDetail
 
@@ -15,7 +16,7 @@ WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
 REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"
 
 JOB_BASE_URLS = {
-    "wanted": WANTED_JOB_BASE_URL,
+    WANTED: WANTED_JOB_BASE_URL,
     "remember": REMEMBER_JOB_BASE_URL,
 }
 
@@ -43,7 +44,7 @@ class JobService:
         created_at = datetime.fromisoformat(create_time) if create_time else None
 
         return {
-            "source": "wanted",
+            "source": WANTED,
             "platform_id": raw["id"],
             "company_id": raw["company"]["id"],
             "company_name": raw["company"]["name"],
@@ -88,7 +89,7 @@ class JobService:
             "updated_at": None,
         }
 
-    def _parse_job(self, raw: dict, source: str = "wanted") -> dict:
+    def _parse_job(self, raw: dict, source: str = WANTED) -> dict:
         if source == "remember":
             return self._parse_remember_job(raw)
         return self._parse_wanted_job(raw)
@@ -103,7 +104,7 @@ class JobService:
             "synced_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
-    def upsert_jobs(self, raw_jobs: list[dict], source: str = "wanted", full_sync: bool = False) -> str:
+    def upsert_jobs(self, raw_jobs: list[dict], source: str = WANTED, full_sync: bool = False) -> str:
         if not raw_jobs:
             return "동기화 완료: 신규 0개, 변경 0개, 유지 0개"
 
@@ -152,14 +153,14 @@ class JobService:
             unchanged_count = len(rows) - new_count - updated_count
             return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
 
-    def upsert_applications(self, raw_apps: list[dict], source: str = "wanted") -> str:
+    def upsert_applications(self, raw_apps: list[dict], source: str = WANTED) -> str:
         if not raw_apps:
             return "지원현황 동기화 완료: 총 0건"
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         with Session(self.engine) as session:
-            if source == "wanted":
+            if source == WANTED:
                 job_platform_ids = [app["job_id"] for app in raw_apps]
             else:
                 job_platform_ids = [app["id"] for app in raw_apps]
@@ -172,7 +173,7 @@ class JobService:
 
             rows = []
             for app in raw_apps:
-                if source == "wanted":
+                if source == WANTED:
                     job_platform_id = app["job_id"]
                     platform_id = app["id"]
                     status = app["status"]
@@ -296,7 +297,7 @@ class JobService:
             .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
             .where(OrmJobDetail.job_id.is_(None))
             .where(Job.is_active.is_(True))
-            .where(Job.source == "wanted")
+            .where(Job.source == WANTED)
             .order_by(Job.internal_id)
         )
         if limit is not None:

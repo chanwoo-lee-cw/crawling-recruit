@@ -56,3 +56,76 @@ def test_remember_syncer_returns_error_without_job_categories():
     syncer = RememberSyncer(service=MagicMock())
     result = syncer.sync(job_category_names=None, min_experience=0, max_experience=5, limit_pages=None)
     assert "job_category_names" in result
+
+
+from services.syncer import WantedApplicationSyncer, RememberApplicationSyncer
+
+
+def test_wanted_application_syncer_calls_client_and_service():
+    mock_service = MagicMock()
+    mock_service.upsert_applications.return_value = "지원현황 동기화 완료: 총 3건"
+
+    with patch("services.syncer.WantedClient") as MockClient:
+        mock_client = MagicMock()
+        mock_client.fetch_applications.return_value = [{"id": 1}, {"id": 2}, {"id": 3}]
+        MockClient.return_value = mock_client
+
+        syncer = WantedApplicationSyncer(mock_service)
+        result = syncer.sync()
+
+    mock_client.fetch_applications.assert_called_once()
+    mock_service.upsert_applications.assert_called_once()
+    assert "3건" in result
+
+
+def test_wanted_application_syncer_returns_error_on_permission_error():
+    mock_service = MagicMock()
+
+    with patch("services.syncer.WantedClient") as MockClient:
+        MockClient.return_value.fetch_applications.side_effect = PermissionError("쿠키가 만료되었습니다.")
+
+        syncer = WantedApplicationSyncer(mock_service)
+        result = syncer.sync()
+
+    assert "쿠키" in result
+
+
+def test_remember_application_syncer_calls_client_and_service():
+    mock_service = MagicMock()
+    mock_service.upsert_applications.return_value = "지원현황 동기화 완료: 총 2건"
+
+    with patch("services.syncer.RememberClient") as MockClient:
+        mock_client = MagicMock()
+        mock_client.fetch_applications.return_value = [{"id": 10}, {"id": 11}]
+        MockClient.return_value = mock_client
+
+        syncer = RememberApplicationSyncer(mock_service)
+        result = syncer.sync()
+
+    mock_client.fetch_applications.assert_called_once()
+    mock_service.upsert_applications.assert_called_once_with([{"id": 10}, {"id": 11}], source="remember")
+    assert "2건" in result
+
+
+def test_remember_application_syncer_returns_error_on_permission_error():
+    mock_service = MagicMock()
+
+    with patch("services.syncer.RememberClient") as MockClient:
+        MockClient.return_value.fetch_applications.side_effect = PermissionError("Remeber 쿠키 만료")
+
+        syncer = RememberApplicationSyncer(mock_service)
+        result = syncer.sync()
+
+    assert "쿠키" in result
+
+
+def test_remember_application_syncer_catches_generic_exception():
+    mock_service = MagicMock()
+
+    with patch("services.syncer.RememberClient") as MockClient:
+        MockClient.return_value.fetch_applications.side_effect = RuntimeError("네트워크 오류")
+
+        syncer = RememberApplicationSyncer(mock_service)
+        result = syncer.sync()
+
+    assert "오류" in result
