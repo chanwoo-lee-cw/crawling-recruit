@@ -1,6 +1,7 @@
 from unittest.mock import patch, MagicMock
 from domain import JobDetail
 from constants import CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
+from services.remember.remember_constants import REMEMBER
 from services.wanted.wanted_constants import WANTED
 
 
@@ -155,7 +156,7 @@ def test_sync_jobs_remember_calls_remember_client():
 
         from tools.sync_jobs import sync_jobs
         result = sync_jobs(
-            source="remember",
+            source=REMEMBER,
             job_category_names=[{"level1": "SW개발", "level2": "백엔드"}],
             min_experience=2,
             max_experience=5,
@@ -167,7 +168,7 @@ def test_sync_jobs_remember_calls_remember_client():
         max_experience=5,
         limit_pages=DEFAULT_LIMIT_PAGES,
     )
-    mock_service.upsert_jobs.assert_called_once_with([], source="remember", full_sync=True)
+    mock_service.upsert_jobs.assert_called_once_with([], source=REMEMBER, full_sync=True)
     mock_service.upsert_remember_details.assert_called_once_with([])
 
 
@@ -185,10 +186,10 @@ def test_sync_applications_remember_calls_remember_client():
         MockRememberClient.return_value = mock_client
 
         from tools.sync_applications import sync_applications
-        result = sync_applications(source="remember")
+        result = sync_applications(source=REMEMBER)
 
     mock_client.fetch_applications.assert_called_once()
-    mock_service.upsert_applications.assert_called_once_with([], source="remember")
+    mock_service.upsert_applications.assert_called_once_with([], source=REMEMBER)
 
 
 def test_get_job_candidates_returns_url():
@@ -267,7 +268,7 @@ def test_get_job_candidates_includes_job_id():
 
     mock_candidate = JobCandidate(
         internal_id=42,
-        source="remember",
+        source=REMEMBER,
         platform_id=307222,
         company_name="랭디",
         title="백엔드 개발자",

@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import patch, call
-from constants.wanted_constants import WANTED
+
+from services.remember.remember_constants import REMEMBER
+from services.wanted.wanted_constants import WANTED
 
 
 def test_run_calls_sync_jobs_for_each_source():
@@ -20,7 +21,7 @@ def test_run_calls_sync_jobs_for_each_source():
     calls = mock_sync_jobs.call_args_list
     assert calls[0] == call(source=WANTED)
     assert calls[1] == call(
-        source="remember",
+        source=REMEMBER,
         job_category_names=[{"name": "백엔드 개발자"}, {"name": "서버 개발자"}],
     )
     mock_details.assert_called_once()

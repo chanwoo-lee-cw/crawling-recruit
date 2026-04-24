@@ -1,3 +1,4 @@
+from services.remember.remember_constants import REMEMBER
 from services.wanted.wanted_constants import WANTED
 from db.connection import get_engine
 from services.jobs.job_service import JobService
@@ -21,7 +22,7 @@ def sync_jobs(
 ) -> str:
     """채용공고를 동기화한다.
 
-    source: WANTED (기본) 또는 "remember"
+    source: WANTED (기본) 또는 REMEMBER
     Wanted: preset_name, job_group_id, job_ids, years, locations, limit_pages 사용
     Remember: job_category_names, min_experience, max_experience 사용
     """
@@ -43,7 +44,7 @@ def sync_jobs(
         max_experience = params.get("max_experience", max_experience)
         job_sort = params.get("job_sort", job_sort)
 
-    if source == "remember":
+    if source == REMEMBER:
         return RememberSyncer(service).sync(
             job_category_names=job_category_names,
             min_experience=min_experience,

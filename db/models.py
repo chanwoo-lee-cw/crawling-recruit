@@ -3,6 +3,8 @@ from typing import Optional, List
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Boolean, DateTime, JSON, Text, ForeignKey, UniqueConstraint
 
+from services.wanted.wanted_constants import WANTED
+
 
 class Base(DeclarativeBase):
     pass
@@ -12,7 +14,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     internal_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    source: Mapped[str] = mapped_column(String(20), nullable=False, default="wanted")
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default=WANTED)
     platform_id: Mapped[int] = mapped_column(Integer, nullable=False)
     company_id: Mapped[Optional[int]] = mapped_column(Integer)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -40,7 +42,7 @@ class Application(Base):
     __tablename__ = "applications"
 
     internal_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    source: Mapped[str] = mapped_column(String(20), nullable=False, default="wanted")
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default=WANTED)
     platform_id: Mapped[int] = mapped_column(Integer, nullable=False)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.internal_id"), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False)

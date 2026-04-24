@@ -329,9 +329,9 @@ def test_parse_remember_job():
         "max_salary": None,
     }
     service = JobService(engine=MagicMock())
-    row = service._parse_job(raw, source="remember")
+    row = service._parse_job(raw, source=REMEMBER)
     assert row["platform_id"] == 308098
-    assert row["source"] == "remember"
+    assert row["source"] == REMEMBER
     assert row["company_name"] == "(주)이스트소프트"
     assert row["location"] == "서울특별시 서초구"
     assert row["employment_type"] is None
@@ -363,7 +363,7 @@ def test_upsert_jobs_remember_source():
         ]
 
         service = JobService(engine=mock_engine)
-        result = service.upsert_jobs([raw_remember_job], source="remember", full_sync=False)
+        result = service.upsert_jobs([raw_remember_job], source=REMEMBER, full_sync=False)
 
     assert "동기화 완료" in result
 
@@ -413,7 +413,7 @@ def test_upsert_applications_remember_source():
         ]
 
         service = JobService(engine=mock_engine)
-        result = service.upsert_applications([raw_app], source="remember")
+        result = service.upsert_applications([raw_app], source=REMEMBER)
 
     assert "1건" in result
 
@@ -479,7 +479,7 @@ def test_get_unapplied_jobs_remember_url():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_session.execute.return_value.mappings.return_value.all.return_value = [
-            {"internal_id": 99, "source": "remember", "platform_id": 308098,
+            {"internal_id": 99, "source": REMEMBER, "platform_id": 308098,
              "company_name": "이스트소프트", "title": "백엔드 개발",
              "location": "서울 서초구", "employment_type": None}
         ]
@@ -503,7 +503,7 @@ def test_save_preset_remember_keys():
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
         service = JobService(engine=mock_engine)
         result = service.save_preset("리멤버 백엔드", {
-            "source": "remember",
+            "source": REMEMBER,
             "job_category_names": [{"level1": "SW개발", "level2": "백엔드"}],
             "min_experience": 2,
             "max_experience": 5,

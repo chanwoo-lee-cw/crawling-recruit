@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from services.base_syncer import BaseSyncer
+from services.remember.remember_constants import REMEMBER
 from services.wanted.wanted_syncer import WantedSyncer
 from services.remember.remember_syncer import RememberSyncer
 from services.wanted.wanted_application_syncer import WantedApplicationSyncer
@@ -51,7 +52,7 @@ def test_remember_syncer_calls_client_upsert_and_details():
         )
 
     mock_client.fetch_jobs.assert_called_once()
-    mock_service.upsert_jobs.assert_called_once_with([{"id": 10}], source="remember", full_sync=True)
+    mock_service.upsert_jobs.assert_called_once_with([{"id": 10}], source=REMEMBER, full_sync=True)
     mock_service.upsert_remember_details.assert_called_once_with([{"id": 10}])
     assert "동기화 완료" in result
 
@@ -104,7 +105,7 @@ def test_remember_application_syncer_calls_client_and_service():
         result = syncer.sync()
 
     mock_client.fetch_applications.assert_called_once()
-    mock_service.upsert_applications.assert_called_once_with([{"id": 10}, {"id": 11}], source="remember")
+    mock_service.upsert_applications.assert_called_once_with([{"id": 10}, {"id": 11}], source=REMEMBER)
     assert "2건" in result
 
 

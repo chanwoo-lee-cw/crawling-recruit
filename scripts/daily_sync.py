@@ -2,6 +2,9 @@ import sys
 import os
 from datetime import datetime
 
+from services.remember.remember_constants import REMEMBER
+from services.wanted.wanted_constants import WANTED
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -11,11 +14,11 @@ from tools.sync_jobs import sync_jobs
 from tools.sync_job_details import sync_job_details
 from tools.sync_applications import sync_applications
 
-SOURCES = ["wanted", "remember"]
+SOURCES = [WANTED, REMEMBER]
 
 SYNC_CONFIG = {
-    "wanted": {},
-    "remember": {
+    WANTED: {},
+    REMEMBER: {
         "job_category_names": [
             {"name": "백엔드 개발자"},
             {"name": "서버 개발자"},
