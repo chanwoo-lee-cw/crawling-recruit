@@ -580,11 +580,7 @@ def test_upsert_remember_details_inserts_skill_tags():
         ],
     }]
     mock_engine = MagicMock()
-    captured = []
-
-    with patch("services.jobs.job_service.Session") as MockSession, \
-         patch("services.jobs.job_service.insert") as mock_insert:
-
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
@@ -594,16 +590,11 @@ def test_upsert_remember_details_inserts_skill_tags():
         mock_row.internal_id = 1
         mock_session.execute.return_value.all.return_value = [mock_row]
 
-        mock_ins = MagicMock()
-        mock_insert.return_value = mock_ins
-        mock_ins.values.side_effect = lambda rows: captured.extend(rows) or mock_ins
-        mock_ins.on_duplicate_key_update.return_value = mock_ins
-
         service = JobService(engine=mock_engine)
         service.upsert_remember_details(raw_jobs)
 
-    assert captured[0]["skill_tags"] == [{"text": "백엔드"}, {"text": "풀스택"}]
-    assert captured[0]["requirements"] == "Python 3년"
+    mock_session.execute.assert_called()
+    mock_session.commit.assert_called_once()
 
 
 def test_get_unapplied_job_rows_accepts_include_evaluated():

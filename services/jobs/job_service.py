@@ -12,6 +12,7 @@ from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
 from db.repositories.job_skip_repository import JobSkipRepository
 from db.repositories.job_evaluation_repository import JobEvaluationRepository
+from db.repositories.job_repository import JobRepository
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -138,46 +139,20 @@ class JobService:
         synced_pairs = [(source, r["platform_id"]) for r in rows]
 
         with Session(self.engine) as session:
-            existing_pairs = set(session.execute(
-                select(Job.source, Job.platform_id)
-                .where(tuple_(Job.source, Job.platform_id).in_(synced_pairs))
-            ).all())
+            repo = JobRepository(session)
+            existing_pairs = repo.find_existing_pairs(source, [r["platform_id"] for r in rows])
             new_count = len(rows) - len(existing_pairs)
 
-            stmt = insert(Job.__table__).values(rows)
-            update_dict = {
-                "company_name": stmt.inserted.company_name,
-                "title": stmt.inserted.title,
-                "location": stmt.inserted.location,
-                "employment_type": stmt.inserted.employment_type,
-                "annual_from": stmt.inserted.annual_from,
-                "annual_to": stmt.inserted.annual_to,
-                "is_active": stmt.inserted.is_active,
-                "synced_at": stmt.inserted.synced_at,
-                "updated_at": text(
-                    "IF(new.company_name <> jobs.company_name OR new.title <> jobs.title "
-                    "OR new.location <> jobs.location OR new.employment_type <> jobs.employment_type "
-                    "OR new.annual_from <> jobs.annual_from OR new.annual_to <> jobs.annual_to, "
-                    "NOW(), jobs.updated_at)"
-                ),
-            }
-            upsert_stmt = stmt.on_duplicate_key_update(**update_dict)
-            result = session.execute(upsert_stmt)
+            result = repo.upsert(rows)
             session.commit()
 
             if full_sync and synced_pairs:
-                session.execute(
-                    update(Job)
-                    .where(Job.source == source)
-                    .where(tuple_(Job.source, Job.platform_id).not_in(synced_pairs))
-                    .where(Job.is_active == True)
-                    .values(is_active=False)
-                )
+                repo.deactivate_removed(source, synced_pairs)
                 session.commit()
 
-            updated_count = (result.rowcount - new_count) // 2
-            unchanged_count = len(rows) - new_count - updated_count
-            return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
+        updated_count = (result.rowcount - new_count) // 2
+        unchanged_count = len(rows) - new_count - updated_count
+        return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
 
     def upsert_applications(self, raw_apps: list[dict], source: str = WANTED) -> str:
         if not raw_apps:
@@ -192,11 +167,7 @@ class JobService:
         job_platform_ids = [p["job_platform_id"] for p in parsed]
 
         with Session(self.engine) as session:
-            job_id_map = {row.platform_id: row.internal_id for row in session.execute(
-                select(Job.platform_id, Job.internal_id)
-                .where(Job.source == source)
-                .where(Job.platform_id.in_(job_platform_ids))
-            ).all()}
+            job_id_map = JobRepository(session).find_platform_id_map(source, job_platform_ids)
 
             rows = []
             for p in parsed:
@@ -249,14 +220,7 @@ class JobService:
         platform_ids = [r["id"] for r in raw_jobs]
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         with Session(self.engine) as session:
-            internal_id_map = {
-                row.platform_id: row.internal_id
-                for row in session.execute(
-                    select(Job.platform_id, Job.internal_id)
-                    .where(Job.source == REMEMBER)
-                    .where(Job.platform_id.in_(platform_ids))
-                ).all()
-            }
+            internal_id_map = JobRepository(session).find_platform_id_map(REMEMBER, platform_ids)
             detail_rows = []
             for raw in raw_jobs:
                 internal_id = internal_id_map.get(raw["id"])
@@ -273,13 +237,7 @@ class JobService:
                 })
             if not detail_rows:
                 return
-            stmt = insert(OrmJobDetail.__table__).values(detail_rows)
-            session.execute(stmt.on_duplicate_key_update(
-                requirements=stmt.inserted.requirements,
-                preferred_points=stmt.inserted.preferred_points,
-                skill_tags=stmt.inserted.skill_tags,
-                fetched_at=stmt.inserted.fetched_at,
-            ))
+            JobDetailRepository(session).upsert(detail_rows)
             session.commit()
 
     def get_jobs_without_details(
@@ -293,19 +251,8 @@ class JobService:
             missing = [jid for jid in job_ids if jid not in existing]
             return missing[:limit] if limit is not None else missing
 
-        # job_ids=None 경로는 Task 7에서 처리 (임시로 기존 코드 유지)
-        stmt = (
-            select(Job.internal_id)
-            .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
-            .where(OrmJobDetail.job_id.is_(None))
-            .where(Job.is_active.is_(True))
-            .where(Job.source == WANTED)
-            .order_by(Job.internal_id)
-        )
-        if limit is not None:
-            stmt = stmt.limit(limit)
         with Session(self.engine) as session:
-            return list(session.scalars(stmt).all())
+            return JobRepository(session).find_without_details(source=WANTED, limit=limit)
 
     def get_unapplied_jobs(
         self,
@@ -316,37 +263,15 @@ class JobService:
     ) -> str:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
-
-        applied_pairs = (
-            select(Job.company_name, Job.title)
-            .join(Application, Job.internal_id == Application.job_id)
-        )
-
-        stmt = (
-            select(
-                Job.internal_id, Job.source, Job.platform_id,
-                Job.company_name, Job.title, Job.location, Job.employment_type,
-            )
-            .outerjoin(JobSkip, Job.internal_id == JobSkip.job_id)
-            .where(tuple_(Job.company_name, Job.title).not_in(applied_pairs))
-            .where(JobSkip.job_id.is_(None))
-            .where(Job.is_active.is_(True))
-        )
-
-        if job_group_id is not None:
-            stmt = stmt.where(Job.job_group_id == job_group_id)
-        if location:
-            stmt = stmt.where(Job.location.ilike(f"%{location}%"))
-        if employment_type:
-            stmt = stmt.where(Job.employment_type == employment_type)
-        stmt = stmt.limit(limit)
-
         with Session(self.engine) as session:
-            rows = session.execute(stmt).mappings().all()
-
+            rows = JobRepository(session).find_unapplied(
+                job_group_id=job_group_id,
+                location=location,
+                employment_type=employment_type,
+                limit=limit,
+            )
         if not rows:
             return "미지원 공고가 없습니다."
-
         lines = ["| internal_id | 회사명 | 포지션 | 지역 | 링크 |", "|---|---|---|---|---|"]
         for row in rows:
             base_url = JOB_BASE_URLS.get(row["source"], WANTED_JOB_BASE_URL)
@@ -366,40 +291,13 @@ class JobService:
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
-
-        applied_pairs = (
-            select(Job.company_name, Job.title)
-            .join(Application, Job.internal_id == Application.job_id)
-        )
-
-        stmt = (
-            select(
-                Job.internal_id, Job.source, Job.platform_id,
-                Job.company_name, Job.title, Job.location, Job.employment_type,
-                OrmJobDetail.requirements, OrmJobDetail.preferred_points,
-                OrmJobDetail.skill_tags, OrmJobDetail.fetched_at,
-            )
-            .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
-            .outerjoin(JobSkip, Job.internal_id == JobSkip.job_id)
-            .outerjoin(JobEvaluation, Job.internal_id == JobEvaluation.job_id)
-            .where(tuple_(Job.company_name, Job.title).not_in(applied_pairs))
-            .where(JobSkip.job_id.is_(None))
-            .where(Job.is_active.is_(True))
-        )
-
-        if not include_evaluated:
-            stmt = stmt.where(JobEvaluation.job_id.is_(None))
-
-        if job_group_id is not None:
-            stmt = stmt.where(Job.job_group_id == job_group_id)
-        if location:
-            stmt = stmt.where(Job.location.ilike(f"%{location}%"))
-        if employment_type:
-            stmt = stmt.where(Job.employment_type == employment_type)
-
         with Session(self.engine) as session:
-            rows = session.execute(stmt).mappings().all()
-
+            rows = JobRepository(session).find_unapplied_with_details(
+                job_group_id=job_group_id,
+                location=location,
+                employment_type=employment_type,
+                include_evaluated=include_evaluated,
+            )
         return [JobCandidate.from_row(r) for r in rows]
 
     def skip_jobs(self, job_ids: list[int], reason: str | None = None) -> str:
