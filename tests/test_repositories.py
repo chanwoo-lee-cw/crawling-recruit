@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
+from db.repositories.application_repository import ApplicationRepository
 
 
 def test_find_by_name_returns_none_when_missing():
@@ -41,4 +42,12 @@ def test_job_detail_upsert_calls_execute():
     repo = JobDetailRepository(mock_session)
     repo.upsert([{"job_id": 1, "requirements": "Python", "preferred_points": None,
                   "skill_tags": [], "fetched_at": None}])
+    assert mock_session.execute.called
+
+
+def test_application_upsert_calls_execute():
+    mock_session = MagicMock()
+    repo = ApplicationRepository(mock_session)
+    repo.upsert([{"source": "wanted", "platform_id": 1, "job_id": 1,
+                  "status": "complete", "apply_time": None, "synced_at": None}])
     assert mock_session.execute.called

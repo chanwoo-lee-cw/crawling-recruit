@@ -9,6 +9,7 @@ from services.remember.remember_constants import REMEMBER
 from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
+from db.repositories.application_repository import ApplicationRepository
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -216,12 +217,7 @@ class JobService:
             if not rows:
                 return "지원현황 동기화 완료: 총 0건"
 
-            stmt = insert(Application.__table__).values(rows)
-            upsert_stmt = stmt.on_duplicate_key_update(
-                status=stmt.inserted.status,
-                synced_at=stmt.inserted.synced_at,
-            )
-            session.execute(upsert_stmt)
+            ApplicationRepository(session).upsert(rows)
             session.commit()
 
         return f"지원현황 동기화 완료: 총 {len(rows)}건"
