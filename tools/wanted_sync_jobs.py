@@ -1,12 +1,13 @@
 from constants import DEFAULT_LIMIT_PAGES
 from db.connection import get_engine
+from db.models import SearchPreset
 from services.jobs.job_service import JobService
+from services.wanted.wanted_constants import WantedJobGroupId, WANTED
 from services.wanted.wanted_syncer import WantedSyncer
 
 
 def wanted_sync_jobs(
-        preset_name: str | None = None,
-        job_group_id: int = 518,
+        job_group_id: int = WantedJobGroupId.SERVER_DEVELOPER.value,
         job_ids: list[int] | None = None,
         years: list[int] | None = None,
         locations: str = "all",
@@ -19,15 +20,15 @@ def wanted_sync_jobs(
     engine = get_engine()
     service = JobService(engine)
 
-    params = service.get_preset_params(preset_name)
-    if params is None:
-        return f"프리셋 '{preset_name}'을 찾을 수 없습니다."
-    job_group_id = params.get("job_group_id", job_group_id)
-    job_ids = params.get("job_ids", job_ids)
-    years = params.get("years", years)
-    locations = params.get("locations", locations)
-    limit_pages = params.get("limit_pages", limit_pages)
-    job_sort = params.get("job_sort", job_sort)
+    preset: SearchPreset | None = service.get_preset_params(WANTED)
+    if preset:
+        p = preset.params
+        job_group_id = p.get("job_group_id", job_group_id)
+        job_ids = p.get("job_ids", job_ids)
+        years = p.get("years", years)
+        locations = p.get("locations", locations)
+        limit_pages = p.get("limit_pages", limit_pages)
+        job_sort = p.get("job_sort", job_sort)
 
     return WantedSyncer(service).sync(
         job_group_id=job_group_id,

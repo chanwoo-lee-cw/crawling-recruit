@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 
+from db.models import SearchPreset
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
 from db.repositories.search_preset_repository import SearchPresetRepository
@@ -327,12 +328,11 @@ class JobService:
         return f"저장된 프리셋: {', '.join(r.name for r in presets)}"
 
     @transactional()
-    def get_preset_params(self, name: str) -> dict | None:
-        preset = SearchPresetRepository(get_current_session()).find_by_name(name)
+    def get_preset_params(self, name: str) -> SearchPreset | None:
+        preset: SearchPreset = SearchPresetRepository(get_current_session()).find_by_name(name.upper())
         if not preset:
             return None
-        params = preset.params
-        return json.loads(params) if isinstance(params, str) else params
+        return preset
 
     def get_recommended_jobs(
         self,

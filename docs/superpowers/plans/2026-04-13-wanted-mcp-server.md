@@ -256,8 +256,7 @@ git commit -m "feat: DB 모델 및 연결 설정"
 import pytest
 from unittest.mock import patch, MagicMock
 import httpx
-from services.wanted_client import WantedClient
-
+from services.wanted.wanted_client import WantedClient
 
 MOCK_JOBS_PAGE_1 = {
     "data": [
@@ -360,8 +359,8 @@ def test_fetch_applications_single_page():
 
 
 def test_retry_on_429():
-    with patch("services.wanted_client.httpx.get") as mock_get, \
-         patch("services.wanted_client.time.sleep") as mock_sleep:
+    with patch("services.wanted_client.httpx.get") as mock_get,
+            patch("services.wanted_client.time.sleep") as mock_sleep:
         rate_limit_resp = MagicMock()
         rate_limit_resp.status_code = 429
         rate_limit_resp.headers = {}
@@ -959,17 +958,17 @@ Expected: FAIL
 
 ```python
 from db.connection import get_engine
-from services.wanted_client import WantedClient
+from services.wanted.wanted_client import WantedClient
 from services.job_service import JobService
 
 
 def sync_jobs(
-    preset_name: str | None = None,
-    job_group_id: int = 518,
-    job_ids: list[int] | None = None,
-    years: list[int] | None = None,
-    locations: str = "all",
-    limit_pages: int | None = None,
+        preset_name: str | None = None,
+        job_group_id: int = 518,
+        job_ids: list[int] | None = None,
+        years: list[int] | None = None,
+        locations: str = "all",
+        limit_pages: int | None = None,
 ) -> str:
     engine = get_engine()
     service = JobService(engine)
@@ -1000,7 +999,7 @@ def sync_jobs(
 
 ```python
 from db.connection import get_engine
-from services.wanted_client import WantedClient
+from services.wanted.wanted_client import WantedClient
 from services.job_service import JobService
 
 

@@ -6,9 +6,9 @@ from services.wanted.wanted_constants import WANTED
 
 
 def test_sync_jobs_uses_preset_when_given():
-    with patch("tools.sync_jobs.get_engine") as mock_engine, \
+    with patch("tools.wanted_sync_jobs.get_engine") as mock_engine, \
          patch("services.wanted.wanted_syncer.WantedClient") as mock_client_cls, \
-         patch("tools.sync_jobs.JobService") as mock_service_cls:
+         patch("tools.wanted_sync_jobs.JobService") as mock_service_cls:
 
         mock_service = MagicMock()
         mock_service.get_preset_params.return_value = {"job_group_id": 519}
@@ -19,8 +19,8 @@ def test_sync_jobs_uses_preset_when_given():
         mock_client.fetch_jobs.return_value = []
         mock_client_cls.return_value = mock_client
 
-        from tools.sync_jobs import sync_jobs
-        result = sync_jobs(preset_name="백엔드 신입")
+        from tools.wanted_sync_jobs import wanted_sync_jobs
+        result = wanted_sync_jobs(preset_name="백엔드 신입")
 
     mock_service.get_preset_params.assert_called_once_with("백엔드 신입")
     mock_service.upsert_jobs.assert_called_once()
@@ -142,11 +142,12 @@ def test_skip_jobs_tool_calls_service():
 
 
 def test_sync_jobs_remember_calls_remember_client():
-    with patch("tools.sync_jobs.get_engine"), \
+    with patch("tools.remember_sync_jobs.get_engine"), \
          patch("services.remember.remember_syncer.RememberClient") as MockRememberClient, \
-         patch("tools.sync_jobs.JobService") as MockService:
+         patch("tools.remember_sync_jobs.JobService") as MockService:
 
         mock_service = MagicMock()
+        mock_service.get_preset_params.return_value = {}
         mock_service.upsert_jobs.return_value = "동기화 완료: 신규 3개, 변경 0개, 유지 0개"
         MockService.return_value = mock_service
 
@@ -154,9 +155,8 @@ def test_sync_jobs_remember_calls_remember_client():
         mock_client.fetch_jobs.return_value = []
         MockRememberClient.return_value = mock_client
 
-        from tools.sync_jobs import sync_jobs
-        result = sync_jobs(
-            source=REMEMBER,
+        from tools.remember_sync_jobs import remember_sync_jobs
+        result = remember_sync_jobs(
             job_category_names=[{"level1": "SW개발", "level2": "백엔드"}],
             min_experience=2,
             max_experience=5,

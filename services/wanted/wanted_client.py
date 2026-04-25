@@ -3,13 +3,9 @@ import time
 import httpx
 from dotenv import load_dotenv
 from domain import JobDetail
+from services.wanted.wanted_constants import WantedClientConst, WantedJobSort
 
 load_dotenv()
-
-JOBS_API_URL = "https://www.wanted.co.kr/api/chaos/navigation/v1/results"
-APPS_API_URL = "https://www.wanted.co.kr/api/v1/applications"
-DETAIL_API_URL = "https://www.wanted.co.kr/api/chaos/jobs/v4/{job_id}/details"
-MAX_RETRIES = 3
 
 _UNSET = object()
 
@@ -21,13 +17,13 @@ class WantedClient:
 
     def _get(self, url: str, params: dict, headers: dict | None = None):
         resp = None
-        for attempt in range(MAX_RETRIES):
+        for attempt in range(WantedClientConst.MAX_RETRIES):
             resp = httpx.get(url, params=params, headers=headers or {}, timeout=30)
             if resp.status_code != 429:
                 return resp
             wait = int(resp.headers.get("Retry-After", 1))
             time.sleep(wait)
-        raise RuntimeError(f"Rate limit exceeded after {MAX_RETRIES} retries: {url}")
+        raise RuntimeError(f"Rate limit exceeded after {WantedClientConst.MAX_RETRIES} retries: {url}")
 
     def fetch_jobs(
         self,
@@ -36,7 +32,7 @@ class WantedClient:
         years: list[int] | None = None,
         locations: str = "all",
         limit_pages: int | None = None,
-        job_sort: str = "job.popularity_order",
+        job_sort: str = WantedJobSort.RECOMMEND_ORDER.value,
     ) -> list[dict]:
         params = {
             "job_group_id": job_group_id,
@@ -55,7 +51,7 @@ class WantedClient:
         page = 0
 
         while True:
-            resp = self._get(JOBS_API_URL, params)
+            resp = self._get(WantedClientConst.JOBS_API_URL, params)
             data = resp.json()
             all_jobs.extend(data.get("data", []))
             page += 1
@@ -94,7 +90,7 @@ class WantedClient:
         all_apps = []
 
         while True:
-            resp = self._get(APPS_API_URL, params, headers=headers)
+            resp = self._get(WantedClientConst.APPS_API_URL, params, headers=headers)
 
             if resp.status_code in (401, 403):
                 raise PermissionError(
@@ -114,7 +110,7 @@ class WantedClient:
 
     def fetch_job_detail(self, job_id: int) -> JobDetail | None:
         """단일 공고 detail 조회. 실패 시 None 반환."""
-        url = DETAIL_API_URL.format(job_id=job_id)
+        url = WantedClientConst.DETAIL_API_URL.format(job_id=job_id)
         try:
             resp = self._get(url, params={})
         except RuntimeError:

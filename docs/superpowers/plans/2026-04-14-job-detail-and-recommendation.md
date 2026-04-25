@@ -514,7 +514,7 @@
   ```python
   import time
   from db.connection import get_engine
-  from services.wanted_client import WantedClient
+  from services.wanted.wanted_client import WantedClient
   from services.job_service import JobService
 
 
@@ -778,7 +778,7 @@
   import time
   import anthropic
   from db.connection import get_engine
-  from services.wanted_client import WantedClient
+  from services.wanted.wanted_client import WantedClient
   from services.job_service import JobService
 
   CLAUDE_MODEL = "claude-sonnet-4-6"

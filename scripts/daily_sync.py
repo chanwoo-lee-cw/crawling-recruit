@@ -1,31 +1,22 @@
-import sys
 import os
+import sys
 from datetime import datetime
 
-from services.remember.remember_constants import REMEMBER
-from services.wanted.wanted_constants import WANTED
+from services.remember.remember_constants import REMEMBER, RememberJobCategory
+from services.wanted.wanted_constants import WANTED, WantedJobSort
+from tools.remember_sync_jobs import remember_sync_jobs
+from tools.wanted_sync_jobs import wanted_sync_jobs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from tools.sync_jobs import sync_jobs
 from tools.sync_job_details import sync_job_details
 from tools.sync_applications import sync_applications
 
 SOURCES = [WANTED, REMEMBER]
-
-SYNC_CONFIG = {
-    WANTED: {},
-    REMEMBER: {
-        "job_category_names": [
-            {"name": "백엔드 개발자"},
-            {"name": "서버 개발자"},
-        ],
-    },
-}
-
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.makedirs(os.path.join(_PROJECT_ROOT, "logs"), exist_ok=True)
@@ -42,9 +33,12 @@ def run():
     synced_count = 0
     for source in SOURCES:
         try:
-            kwargs = SYNC_CONFIG.get(source, {})
-            result = sync_jobs(source=source, **kwargs)
-            log(f"sync_jobs({source}): {result}")
+            if source == WANTED:
+                wanted_sync()
+            elif source == REMEMBER:
+                remember_sync()
+            else:
+                raise RuntimeError(f"정의되지 않은 source[{source}] 입니다.")
             synced_count += 1
         except Exception as e:
             log(f"sync_jobs({source}): 오류 - {e}")
@@ -66,6 +60,25 @@ def run():
             log(f"sync_applications({source}): 오류 - {e}")
 
     log("=== daily sync end ===")
+
+
+def wanted_sync():
+    for sort in WantedJobSort:
+        try:
+            result = wanted_sync_jobs(job_sort=sort.value)
+            log(f"wanted_sync_jobs({sort.name}): {result}")
+        except Exception as e:
+            log(f"wanted_sync_jobs({sort.name}): 오류 - {e}")
+
+
+def remember_sync():
+    try:
+        result = remember_sync_jobs(
+            job_category_names=[{"name": cat.value} for cat in RememberJobCategory]
+        )
+        log(f"remember_sync_jobs: {result}")
+    except Exception as e:
+        log(f"remember_sync_jobs: 오류 - {e}")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 import time
-from db.connection import get_engine
-from services.wanted.wanted_client import WantedClient
-from services.jobs.job_service import JobService
+
 from constants import CRAWL_DELAY_SECONDS
+from db.connection import get_engine
+from services.jobs.job_service import JobService
+from services.wanted.wanted_client import WantedClient
 
 
 def sync_job_details(

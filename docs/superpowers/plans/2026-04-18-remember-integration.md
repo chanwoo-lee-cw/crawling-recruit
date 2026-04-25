@@ -465,7 +465,6 @@ git commit -m "feat: DB 마이그레이션 함수 및 migrate_db MCP 툴 추가"
 import pytest
 from unittest.mock import patch, MagicMock
 
-
 SAMPLE_JOB = {
     "id": 308098,
     "title": "[ESTsecurity] 백엔드 개발",
@@ -499,7 +498,7 @@ def test_fetch_jobs_success():
         }
         mock_httpx.post.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         jobs = client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
 
@@ -510,8 +509,8 @@ def test_fetch_jobs_success():
 
 
 def test_fetch_applications_success():
-    with patch("services.remember_client.httpx") as mock_httpx, \
-         patch.dict("os.environ", {"REMEMBER_COOKIE": "test_cookie"}):
+    with patch("services.remember_client.httpx") as mock_httpx,
+            patch.dict("os.environ", {"REMEMBER_COOKIE": "test_cookie"}):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -520,7 +519,7 @@ def test_fetch_applications_success():
         }
         mock_httpx.get.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         apps = client.fetch_applications()
 
@@ -532,20 +531,20 @@ def test_fetch_applications_success():
 
 def test_fetch_applications_raises_on_missing_cookie():
     with patch.dict("os.environ", {}, clear=True):
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(ValueError, match="REMEMBER_COOKIE"):
             client.fetch_applications()
 
 
 def test_fetch_applications_raises_on_expired_cookie():
-    with patch("services.remember_client.httpx") as mock_httpx, \
-         patch.dict("os.environ", {"REMEMBER_COOKIE": "expired"}):
+    with patch("services.remember_client.httpx") as mock_httpx,
+            patch.dict("os.environ", {"REMEMBER_COOKIE": "expired"}):
         mock_resp = MagicMock()
         mock_resp.status_code = 401
         mock_httpx.get.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(PermissionError, match="만료"):
             client.fetch_applications()
@@ -557,7 +556,7 @@ def test_fetch_jobs_http_error():
         mock_resp.raise_for_status.side_effect = Exception("500 Server Error")
         mock_httpx.post.return_value = mock_resp
 
-        from services.remember_client import RememberClient
+        from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(Exception, match="500"):
             client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
@@ -1476,22 +1475,22 @@ Expected: 2 tests FAIL
 
 ```python
 from db.connection import get_engine
-from services.wanted_client import WantedClient
-from services.remember_client import RememberClient
+from services.wanted.wanted_client import WantedClient
+from services.remember.remember_client import RememberClient
 from services.job_service import JobService
 
 
 def sync_jobs(
-    source: str = "wanted",
-    preset_name: str | None = None,
-    job_group_id: int = 518,
-    job_ids: list[int] | None = None,
-    years: list[int] | None = None,
-    locations: str = "all",
-    limit_pages: int | None = None,
-    job_category_names: list[dict] | None = None,
-    min_experience: int = 0,
-    max_experience: int = 10,
+        source: str = "wanted",
+        preset_name: str | None = None,
+        job_group_id: int = 518,
+        job_ids: list[int] | None = None,
+        years: list[int] | None = None,
+        locations: str = "all",
+        limit_pages: int | None = None,
+        job_category_names: list[dict] | None = None,
+        min_experience: int = 0,
+        max_experience: int = 10,
 ) -> str:
     """채용공고를 동기화한다.
 
@@ -1546,8 +1545,8 @@ def sync_jobs(
 
 ```python
 from db.connection import get_engine
-from services.wanted_client import WantedClient
-from services.remember_client import RememberClient
+from services.wanted.wanted_client import WantedClient
+from services.remember.remember_client import RememberClient
 from services.job_service import JobService
 
 

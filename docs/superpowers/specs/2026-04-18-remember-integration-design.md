@@ -171,7 +171,7 @@ class JobCandidate:
 ```python
 # services/job_service.py
 WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
-REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job"  # 실제 URL 확인 필요
+REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"  # 실제 URL 확인 필요
 
 JOB_BASE_URLS = {
     "wanted": WANTED_JOB_BASE_URL,

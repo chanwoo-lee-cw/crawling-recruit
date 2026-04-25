@@ -2,10 +2,9 @@ import os
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+from services.remember.remember_constants import RememberClientConst
 
-JOBS_SEARCH_URL = "https://career-api.rememberapp.co.kr/job_postings/search"
-APPLICATIONS_URL = "https://career-api.rememberapp.co.kr/open_profiles/me/job_postings/application_histories"
+load_dotenv()
 
 
 class RememberClient:
@@ -16,10 +15,10 @@ class RememberClient:
     @property
     def _auth_headers(self) -> dict:
         headers = {}
-        if self._cookie:
-            headers["Cookie"] = self._cookie
         if self._auth_token:
             headers["Authorization"] = f"Token token={self._auth_token}"
+        else:
+            raise ValueError("REMEMBER_AUTH_TOKEN이 .env에 설정되지 않았습니다.")
         return headers
 
     def _validate_auth_values(self):
@@ -31,12 +30,12 @@ class RememberClient:
                     raise ValueError(f"{key} 값에 한글이 포함되어 있습니다. .env에 실제 브라우저 값을 붙여넣어 주세요.")
 
     def fetch_jobs(
-        self,
-        job_category_names: list[dict],
-        min_experience: int = 0,
-        max_experience: int = 10,
-        per: int = 30,
-        limit_pages: int | None = None,
+            self,
+            job_category_names: list[dict],
+            min_experience: int = 0,
+            max_experience: int = 10,
+            per: int = 30,
+            limit_pages: int | None = None,
     ) -> list[dict]:
         all_jobs = []
         page = 1
@@ -52,7 +51,7 @@ class RememberClient:
                 "page": page,
                 "per": per,
             }
-            resp = httpx.post(JOBS_SEARCH_URL, json=payload, headers=self._auth_headers, timeout=30)
+            resp = httpx.post(RememberClientConst.JOBS_SEARCH_URL, json=payload, headers=self._auth_headers, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             all_jobs.extend(data.get("data", []))
@@ -73,7 +72,7 @@ class RememberClient:
         page = 1
         while True:
             resp = httpx.get(
-                APPLICATIONS_URL,
+                RememberClientConst.APPLICATIONS_URL,
                 params={"statuses[]": "applied", "page": page, "include_canceled": "false"},
                 headers=self._auth_headers,
                 timeout=30,
