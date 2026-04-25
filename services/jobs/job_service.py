@@ -1,12 +1,9 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import select, update, text, tuple_
-from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
-from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
