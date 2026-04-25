@@ -11,6 +11,7 @@ from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
 from db.repositories.job_skip_repository import JobSkipRepository
+from db.repositories.job_evaluation_repository import JobEvaluationRepository
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -417,21 +418,14 @@ class JobService:
             return "0개 처리"
         invalid = [e.get("verdict") for e in evaluations if e.get("verdict") not in self.VALID_VERDICTS]
         if invalid:
-            raise ValueError(
-                f"유효하지 않은 verdict: {invalid}. 허용 값: good, pass, skip"
-            )
+            raise ValueError(f"유효하지 않은 verdict: {invalid}. 허용 값: good, pass, skip")
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         rows = [
             {"job_id": e["job_id"], "verdict": e["verdict"], "evaluated_at": now}
             for e in evaluations
         ]
         with Session(self.engine) as session:
-            stmt = insert(JobEvaluation.__table__).values(rows)
-            upsert_stmt = stmt.on_duplicate_key_update(
-                verdict=stmt.inserted.verdict,
-                evaluated_at=stmt.inserted.evaluated_at,
-            )
-            session.execute(upsert_stmt)
+            JobEvaluationRepository(session).upsert(rows)
             session.commit()
         return f"{len(rows)}개 평가 저장 완료"
 

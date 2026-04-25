@@ -3,6 +3,7 @@ from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
 from db.repositories.job_skip_repository import JobSkipRepository
+from db.repositories.job_evaluation_repository import JobEvaluationRepository
 
 
 def test_find_by_name_returns_none_when_missing():
@@ -58,4 +59,11 @@ def test_job_skip_upsert_calls_execute():
     mock_session = MagicMock()
     repo = JobSkipRepository(mock_session)
     repo.upsert([{"job_id": 1, "reason": "연봉 낮음", "skipped_at": None}])
+    assert mock_session.execute.called
+
+
+def test_job_evaluation_upsert_calls_execute():
+    mock_session = MagicMock()
+    repo = JobEvaluationRepository(mock_session)
+    repo.upsert([{"job_id": 1, "verdict": "good", "evaluated_at": None}])
     assert mock_session.execute.called

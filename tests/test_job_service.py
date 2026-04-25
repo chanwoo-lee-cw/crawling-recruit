@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from services.wanted.wanted_constants import WANTED
+from services.remember.remember_constants import REMEMBER
 from services.jobs.job_service import JobService
 from domain import JobCandidate, JobDetail, SkillTag
 
@@ -537,17 +538,10 @@ def test_parse_remember_job_fields():
 
 def test_save_job_evaluations_saves_rows():
     mock_engine = MagicMock()
-    with patch("services.jobs.job_service.Session") as MockSession, \
-         patch("services.jobs.job_service.insert") as mock_insert:
-
+    with patch("services.jobs.job_service.Session") as MockSession:
         mock_session = MagicMock()
         MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
         MockSession.return_value.__exit__ = MagicMock(return_value=False)
-
-        mock_insert_instance = MagicMock()
-        mock_insert.return_value = mock_insert_instance
-        mock_insert_instance.values.return_value = mock_insert_instance
-        mock_insert_instance.on_duplicate_key_update.return_value = mock_insert_instance
 
         service = JobService(engine=mock_engine)
         result = service.save_job_evaluations([
@@ -556,8 +550,8 @@ def test_save_job_evaluations_saves_rows():
         ])
 
     assert "2개" in result
+    mock_session.execute.assert_called()
     mock_session.commit.assert_called_once()
-    mock_insert_instance.on_duplicate_key_update.assert_called_once()
 
 
 def test_save_job_evaluations_invalid_verdict():
