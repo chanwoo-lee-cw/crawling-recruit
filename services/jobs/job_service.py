@@ -1,6 +1,5 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
 
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
@@ -10,6 +9,7 @@ from db.repositories.application_repository import ApplicationRepository
 from db.repositories.job_skip_repository import JobSkipRepository
 from db.repositories.job_evaluation_repository import JobEvaluationRepository
 from db.repositories.job_repository import JobRepository
+from db.transaction import transactional, get_current_session
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -41,12 +41,10 @@ class JobService:
         location_str = address.get("location", "")
         district = address.get("district", "")
         location = f"{location_str} {district}".strip() if district else location_str
-
         category_tag = raw.get("category_tag") or {}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         create_time = raw.get("create_time")
         created_at = datetime.fromisoformat(create_time) if create_time else None
-
         return {
             "source": WANTED,
             "platform_id": raw["id"],
@@ -73,7 +71,6 @@ class JobService:
             location = " ".join(p for p in parts if p).strip() or None
         else:
             location = None
-
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         return {
             "source": REMEMBER,
@@ -128,70 +125,57 @@ class JobService:
             return self._parse_remember_applications(raw_apps)
         return self._parse_wanted_applications(raw_apps)
 
+    @transactional()
     def upsert_jobs(self, raw_jobs: list[dict], source: str = WANTED, full_sync: bool = False) -> str:
         if not raw_jobs:
             return "동기화 완료: 신규 0개, 변경 0개, 유지 0개"
-
         rows = [self._parse_job(j, source=source) for j in raw_jobs]
         synced_pairs = [(source, r["platform_id"]) for r in rows]
-
-        with Session(self.engine) as session:
-            repo = JobRepository(session)
-            existing_pairs = repo.find_existing_pairs(source, [r["platform_id"] for r in rows])
-            new_count = len(rows) - len(existing_pairs)
-
-            result = repo.upsert(rows)
-            session.commit()
-
-            if full_sync and synced_pairs:
-                repo.deactivate_removed(source, synced_pairs)
-                session.commit()
-
+        session = get_current_session()
+        repo = JobRepository(session)
+        existing_pairs = repo.find_existing_pairs(source, [r["platform_id"] for r in rows])
+        new_count = len(rows) - len(existing_pairs)
+        result = repo.upsert(rows)
+        if full_sync and synced_pairs:
+            repo.deactivate_removed(source, synced_pairs)
         updated_count = (result.rowcount - new_count) // 2
         unchanged_count = len(rows) - new_count - updated_count
         return f"동기화 완료: 신규 {new_count}개, 변경 {updated_count}개, 유지 {unchanged_count}개"
 
+    @transactional()
     def upsert_applications(self, raw_apps: list[dict], source: str = WANTED) -> str:
         if not raw_apps:
             return "지원현황 동기화 완료: 총 0건"
-
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         parsed = self._parse_applications(raw_apps, source)
-
         if not parsed:
             return "지원현황 동기화 완료: 총 0건"
-
         job_platform_ids = [p["job_platform_id"] for p in parsed]
-
-        with Session(self.engine) as session:
-            job_id_map = JobRepository(session).find_platform_id_map(source, job_platform_ids)
-
-            rows = []
-            for p in parsed:
-                job_internal_id = job_id_map.get(p["job_platform_id"])
-                if job_internal_id is None:
-                    continue
-                apply_time = (
-                    datetime.fromisoformat(p["apply_time_str"]).replace(tzinfo=None)
-                    if p["apply_time_str"] else None
-                )
-                rows.append({
-                    "source": source,
-                    "platform_id": p["platform_id"],
-                    "job_id": job_internal_id,
-                    "status": p["status"],
-                    "apply_time": apply_time,
-                    "synced_at": now,
-                })
-
-            if not rows:
-                return "지원현황 동기화 완료: 총 0건"
-
-            ApplicationRepository(session).upsert(rows)
-            session.commit()
-
+        session = get_current_session()
+        job_id_map = JobRepository(session).find_platform_id_map(source, job_platform_ids)
+        rows = []
+        for p in parsed:
+            job_internal_id = job_id_map.get(p["job_platform_id"])
+            if job_internal_id is None:
+                continue
+            apply_time = (
+                datetime.fromisoformat(p["apply_time_str"]).replace(tzinfo=None)
+                if p["apply_time_str"] else None
+            )
+            rows.append({
+                "source": source,
+                "platform_id": p["platform_id"],
+                "job_id": job_internal_id,
+                "status": p["status"],
+                "apply_time": apply_time,
+                "synced_at": now,
+            })
+        if not rows:
+            return "지원현황 동기화 완료: 총 0건"
+        ApplicationRepository(session).upsert(rows)
         return f"지원현황 동기화 완료: 총 {len(rows)}건"
 
+    @transactional()
     def upsert_job_details(self, details: list[JobDetail]) -> str:
         if not details:
             return "완료: 0개 처리"
@@ -206,51 +190,49 @@ class JobService:
             }
             for d in details
         ]
-        with Session(self.engine) as session:
-            JobDetailRepository(session).upsert(rows)
-            session.commit()
+        JobDetailRepository(get_current_session()).upsert(rows)
         return f"완료: {len(rows)}개 처리"
 
+    @transactional()
     def upsert_remember_details(self, raw_jobs: list[dict]) -> None:
         if not raw_jobs:
             return
         platform_ids = [r["id"] for r in raw_jobs]
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        with Session(self.engine) as session:
-            internal_id_map = JobRepository(session).find_platform_id_map(REMEMBER, platform_ids)
-            detail_rows = []
-            for raw in raw_jobs:
-                internal_id = internal_id_map.get(raw["id"])
-                if not internal_id:
-                    continue
-                categories = raw.get("job_categories") or []
-                skill_tags = [{"text": c["level2"]} for c in categories if c.get("level2")]
-                detail_rows.append({
-                    "job_id": internal_id,
-                    "requirements": raw.get("qualifications"),
-                    "preferred_points": raw.get("preferred_qualifications"),
-                    "skill_tags": skill_tags,
-                    "fetched_at": now,
-                })
-            if not detail_rows:
-                return
-            JobDetailRepository(session).upsert(detail_rows)
-            session.commit()
+        session = get_current_session()
+        internal_id_map = JobRepository(session).find_platform_id_map(REMEMBER, platform_ids)
+        detail_rows = []
+        for raw in raw_jobs:
+            internal_id = internal_id_map.get(raw["id"])
+            if not internal_id:
+                continue
+            categories = raw.get("job_categories") or []
+            skill_tags = [{"text": c["level2"]} for c in categories if c.get("level2")]
+            detail_rows.append({
+                "job_id": internal_id,
+                "requirements": raw.get("qualifications"),
+                "preferred_points": raw.get("preferred_qualifications"),
+                "skill_tags": skill_tags,
+                "fetched_at": now,
+            })
+        if not detail_rows:
+            return
+        JobDetailRepository(session).upsert(detail_rows)
 
+    @transactional()
     def get_jobs_without_details(
         self,
         job_ids: list[int] | None = None,
         limit: int | None = None,
     ) -> list[int]:
+        session = get_current_session()
         if job_ids is not None:
-            with Session(self.engine) as session:
-                existing = JobDetailRepository(session).find_existing_job_ids(job_ids)
+            existing = JobDetailRepository(session).find_existing_job_ids(job_ids)
             missing = [jid for jid in job_ids if jid not in existing]
             return missing[:limit] if limit is not None else missing
+        return JobRepository(session).find_without_details(source=WANTED, limit=limit)
 
-        with Session(self.engine) as session:
-            return JobRepository(session).find_without_details(source=WANTED, limit=limit)
-
+    @transactional()
     def get_unapplied_jobs(
         self,
         job_group_id: int | None = None,
@@ -260,13 +242,12 @@ class JobService:
     ) -> str:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
-        with Session(self.engine) as session:
-            rows = JobRepository(session).find_unapplied(
-                job_group_id=job_group_id,
-                location=location,
-                employment_type=employment_type,
-                limit=limit,
-            )
+        rows = JobRepository(get_current_session()).find_unapplied(
+            job_group_id=job_group_id,
+            location=location,
+            employment_type=employment_type,
+            limit=limit,
+        )
         if not rows:
             return "미지원 공고가 없습니다."
         lines = ["| internal_id | 회사명 | 포지션 | 지역 | 링크 |", "|---|---|---|---|---|"]
@@ -279,6 +260,7 @@ class JobService:
         lines.append(f"총 {len(rows)}개의 미지원 공고")
         return "\n".join(lines)
 
+    @transactional()
     def get_unapplied_job_rows(
         self,
         job_group_id: int | None = None,
@@ -288,26 +270,25 @@ class JobService:
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
-        with Session(self.engine) as session:
-            rows = JobRepository(session).find_unapplied_with_details(
-                job_group_id=job_group_id,
-                location=location,
-                employment_type=employment_type,
-                include_evaluated=include_evaluated,
-            )
+        rows = JobRepository(get_current_session()).find_unapplied_with_details(
+            job_group_id=job_group_id,
+            location=location,
+            employment_type=employment_type,
+            include_evaluated=include_evaluated,
+        )
         return [JobCandidate.from_row(r) for r in rows]
 
+    @transactional()
     def skip_jobs(self, job_ids: list[int], reason: str | None = None) -> str:
         if not job_ids:
             return "제외할 공고 ID를 입력해주세요."
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         rows = [{"job_id": jid, "reason": reason, "skipped_at": now} for jid in job_ids]
-        with Session(self.engine) as session:
-            JobSkipRepository(session).upsert(rows)
-            session.commit()
+        JobSkipRepository(get_current_session()).upsert(rows)
         suffix = f" (사유: {reason})" if reason else ""
         return f"{len(job_ids)}개 공고 제외 완료{suffix}"
 
+    @transactional()
     def save_job_evaluations(self, evaluations: list[dict]) -> str:
         if not evaluations:
             return "0개 처리"
@@ -319,11 +300,10 @@ class JobService:
             {"job_id": e["job_id"], "verdict": e["verdict"], "evaluated_at": now}
             for e in evaluations
         ]
-        with Session(self.engine) as session:
-            JobEvaluationRepository(session).upsert(rows)
-            session.commit()
+        JobEvaluationRepository(get_current_session()).upsert(rows)
         return f"{len(rows)}개 평가 저장 완료"
 
+    @transactional()
     def save_preset(self, name: str, params: dict) -> str:
         invalid_keys = set(params.keys()) - ALLOWED_PRESET_KEYS
         if invalid_keys:
@@ -336,21 +316,19 @@ class JobService:
             "params": params,
             "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
-        with Session(self.engine) as session:
-            SearchPresetRepository(session).upsert(row)
-            session.commit()
+        SearchPresetRepository(get_current_session()).upsert(row)
         return f"프리셋 '{name}' 저장 완료"
 
+    @transactional()
     def list_presets(self) -> str:
-        with Session(self.engine) as session:
-            presets = SearchPresetRepository(session).find_all()
+        presets = SearchPresetRepository(get_current_session()).find_all()
         if not presets:
             return "저장된 프리셋이 없습니다."
         return f"저장된 프리셋: {', '.join(r.name for r in presets)}"
 
+    @transactional()
     def get_preset_params(self, name: str) -> dict | None:
-        with Session(self.engine) as session:
-            preset = SearchPresetRepository(session).find_by_name(name)
+        preset = SearchPresetRepository(get_current_session()).find_by_name(name)
         if not preset:
             return None
         params = preset.params
@@ -362,7 +340,6 @@ class JobService:
         rows: list[JobCandidate],
         top_k: int = 15,
     ) -> list[JobCandidate]:
-        """전달된 rows에서 skill_tags 매칭 점수 기준 상위 top_k개 반환 (detail 없는 공고 제외)."""
         skills_lower = {s.lower() for s in skills}
 
         def score(row: JobCandidate) -> int:
