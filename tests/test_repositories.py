@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
+from db.repositories.job_skip_repository import JobSkipRepository
 
 
 def test_find_by_name_returns_none_when_missing():
@@ -50,4 +51,11 @@ def test_application_upsert_calls_execute():
     repo = ApplicationRepository(mock_session)
     repo.upsert([{"source": "wanted", "platform_id": 1, "job_id": 1,
                   "status": "complete", "apply_time": None, "synced_at": None}])
+    assert mock_session.execute.called
+
+
+def test_job_skip_upsert_calls_execute():
+    mock_session = MagicMock()
+    repo = JobSkipRepository(mock_session)
+    repo.upsert([{"job_id": 1, "reason": "연봉 낮음", "skipped_at": None}])
     assert mock_session.execute.called

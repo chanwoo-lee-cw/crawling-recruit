@@ -10,6 +10,7 @@ from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset,
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
+from db.repositories.job_skip_repository import JobSkipRepository
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -406,12 +407,7 @@ class JobService:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         rows = [{"job_id": jid, "reason": reason, "skipped_at": now} for jid in job_ids]
         with Session(self.engine) as session:
-            stmt = insert(JobSkip.__table__).values(rows)
-            upsert_stmt = stmt.on_duplicate_key_update(
-                reason=stmt.inserted.reason,
-                skipped_at=stmt.inserted.skipped_at,
-            )
-            session.execute(upsert_stmt)
+            JobSkipRepository(session).upsert(rows)
             session.commit()
         suffix = f" (사유: {reason})" if reason else ""
         return f"{len(job_ids)}개 공고 제외 완료{suffix}"
