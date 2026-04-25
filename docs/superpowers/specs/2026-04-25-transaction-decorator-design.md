@@ -50,26 +50,37 @@ def transactional(propagation: Propagation = Propagation.REQUIRED):
 | REQUIRES_NEW | 새 세션 독립 생성, 독립 commit | 새 세션 생성, 끝에 commit |
 | NESTED | begin_nested() (savepoint) | REQUIRED fallback |
 
-예외 발생 시: REQUIRED/REQUIRES_NEW → rollback 후 re-raise. NESTED → savepoint만 롤백, 외부 트랜잭션 유지.
+예외 발생 시: REQUIRED/REQUIRES_NEW → rollback 후 re-raise. NESTED → savepoint만 롤백, 외부 트랜잭션 유지. NESTED에서 외부 세션이 없을 때 fallback 시에도 에러 처리는 REQUIRED와 동일하게 rollback 후 re-raise.
+
+> **Note:** `REQUIRES_NEW`는 현재 코드베이스에서 사용하지 않지만, 향후 감사 로그 등 독립 트랜잭션이 필요한 경우를 위해 포함한다.
 
 ## upsert_jobs 중간 커밋 제거
 
-기존에 `upsert` 후 `commit()`, `deactivate_removed` 후 `commit()` 두 번 호출하던 것을 하나의 트랜잭션으로 합친다. 두 커밋은 순서 보장 목적이었을 뿐 기술적 필수 조건이 아니다.
+기존에 `upsert` 후 `commit()`, `deactivate_removed` 후 `commit()` 두 번 호출하던 것을 하나의 트랜잭션으로 합친다. 두 커밋은 순서 보장 목적이었을 뿐 기술적 필수 조건이 아니다. SQLAlchemy의 identity map이 동일 세션 내 쓰기 가시성을 보장하며, DB 레벨 트리거는 존재하지 않는다.
 
 ## 테스트 전략
 
-`ContextVar`를 직접 세팅해 데코레이터 없이 세션 주입 가능:
+`db/transaction.py`에 테스트용 컨텍스트 매니저 `test_session_context(session)`을 공개 API로 제공한다. 내부 `_session_var`을 직접 노출하지 않아 리팩토링 시 테스트가 깨지는 것을 방지한다.
 
 ```python
-from db.transaction import _session_var
+# db/transaction.py에 추가
+from contextlib import contextmanager
 
-with Session(engine) as session:
+@contextmanager
+def test_session_context(session):
     token = _session_var.set(session)
     try:
-        service.upsert_jobs(raw_jobs)
-        session.rollback()
+        yield session
     finally:
         _session_var.reset(token)
+
+# 테스트에서 사용
+from db.transaction import test_session_context
+
+with Session(engine) as session:
+    with test_session_context(session):
+        service.upsert_jobs(raw_jobs)
+    session.rollback()
 ```
 
 ## 변경 파일
