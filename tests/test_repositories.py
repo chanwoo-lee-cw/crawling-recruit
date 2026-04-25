@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 from db.repositories.search_preset_repository import SearchPresetRepository
+from db.repositories.job_detail_repository import JobDetailRepository
 
 
 def test_find_by_name_returns_none_when_missing():
@@ -24,4 +25,20 @@ def test_upsert_calls_execute():
     mock_session = MagicMock()
     repo = SearchPresetRepository(mock_session)
     repo.upsert({"name": "x", "params": {}, "created_at": None})
+    assert mock_session.execute.called
+
+
+def test_job_detail_find_existing_job_ids():
+    mock_session = MagicMock()
+    mock_session.scalars.return_value.all.return_value = [101, 102]
+    repo = JobDetailRepository(mock_session)
+    result = repo.find_existing_job_ids([101, 102, 103])
+    assert result == {101, 102}
+
+
+def test_job_detail_upsert_calls_execute():
+    mock_session = MagicMock()
+    repo = JobDetailRepository(mock_session)
+    repo.upsert([{"job_id": 1, "requirements": "Python", "preferred_points": None,
+                  "skill_tags": [], "fetched_at": None}])
     assert mock_session.execute.called

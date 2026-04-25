@@ -8,6 +8,7 @@ from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
 from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
 from db.repositories.search_preset_repository import SearchPresetRepository
+from db.repositories.job_detail_repository import JobDetailRepository
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -240,14 +241,7 @@ class JobService:
             for d in details
         ]
         with Session(self.engine) as session:
-            stmt = insert(OrmJobDetail.__table__).values(rows)
-            upsert_stmt = stmt.on_duplicate_key_update(
-                requirements=stmt.inserted.requirements,
-                preferred_points=stmt.inserted.preferred_points,
-                skill_tags=stmt.inserted.skill_tags,
-                fetched_at=stmt.inserted.fetched_at,
-            )
-            session.execute(upsert_stmt)
+            JobDetailRepository(session).upsert(rows)
             session.commit()
         return f"완료: {len(rows)}개 처리"
 
@@ -297,12 +291,11 @@ class JobService:
     ) -> list[int]:
         if job_ids is not None:
             with Session(self.engine) as session:
-                existing = set(session.scalars(
-                    select(OrmJobDetail.job_id).where(OrmJobDetail.job_id.in_(job_ids))
-                ).all())
+                existing = JobDetailRepository(session).find_existing_job_ids(job_ids)
             missing = [jid for jid in job_ids if jid not in existing]
             return missing[:limit] if limit is not None else missing
 
+        # job_ids=None 경로는 Task 7에서 처리 (임시로 기존 코드 유지)
         stmt = (
             select(Job.internal_id)
             .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
