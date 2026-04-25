@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
 from db.models import Job, Application, JobDetail as OrmJobDetail, SearchPreset, JobSkip, JobEvaluation
+from db.repositories.search_preset_repository import SearchPresetRepository
 from domain import JobCandidate, JobDetail
 
 ALLOWED_PRESET_KEYS = {
@@ -456,41 +457,26 @@ class JobService:
                 f"유효하지 않은 파라미터 키: {sorted(invalid_keys)}. "
                 f"허용 키: {', '.join(sorted(ALLOWED_PRESET_KEYS))}"
             )
-
         row = {
             "name": name,
             "params": params,
             "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
-
         with Session(self.engine) as session:
-            stmt = insert(SearchPreset.__table__).values([row])
-            upsert_stmt = stmt.on_duplicate_key_update(
-                params=stmt.inserted.params,
-                created_at=stmt.inserted.created_at,
-            )
-            session.execute(upsert_stmt)
+            SearchPresetRepository(session).upsert(row)
             session.commit()
-
         return f"프리셋 '{name}' 저장 완료"
 
     def list_presets(self) -> str:
         with Session(self.engine) as session:
-            presets = session.scalars(
-                select(SearchPreset).order_by(SearchPreset.created_at)
-            ).all()
-
+            presets = SearchPresetRepository(session).find_all()
         if not presets:
             return "저장된 프리셋이 없습니다."
-        names = ", ".join(r.name for r in presets)
-        return f"저장된 프리셋: {names}"
+        return f"저장된 프리셋: {', '.join(r.name for r in presets)}"
 
     def get_preset_params(self, name: str) -> dict | None:
         with Session(self.engine) as session:
-            preset = session.scalars(
-                select(SearchPreset).where(SearchPreset.name == name)
-            ).first()
-
+            preset = SearchPresetRepository(session).find_by_name(name)
         if not preset:
             return None
         params = preset.params
