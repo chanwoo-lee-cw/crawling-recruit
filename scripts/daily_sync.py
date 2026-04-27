@@ -2,16 +2,16 @@ import os
 import sys
 from datetime import datetime
 
-from services.remember.remember_constants import REMEMBER, RememberJobCategory
-from services.wanted.wanted_constants import WANTED, WantedJobSort
-from tools.remember_sync_jobs import remember_sync_jobs
-from tools.wanted_sync_jobs import wanted_sync_jobs
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from services.remember.remember_constants import REMEMBER, RememberJobCategory
+from services.wanted.wanted_constants import WANTED, WantedJobSort
+from tools.remember_sync_jobs import remember_sync_jobs
+from tools.wanted_sync_jobs import wanted_sync_jobs
 
 from tools.sync_job_details import sync_job_details
 from tools.sync_applications import sync_applications
