@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 from services.jobs.job_service import JobService
 from services.nhn.nhn_constants import NHN
+from services.nhn.nhn_detail_syncer import NHNDetailSyncer
 
 RAW_NHN_JOB = {
     "id": "4317632272881051418",
@@ -51,6 +52,48 @@ def test_parse_nhn_job():
     assert row["job_group_id"] is None
     assert row["category_tag_id"] is None
     assert row["is_active"] is True
+
+
+RAW_NHN_DETAIL = {
+    "id": "4317632272881051418",
+    "jobSeries": [
+        {"id": "aaa", "name": "QA"},
+        {"id": "aaa", "name": "QA"},  # 중복
+        {"id": "bbb", "name": "Backend"},
+    ],
+    "jobPostingContentsItems": [
+        {
+            "title": "이런 분들을 찾고 있어요 (자격요건)",
+            "contents": ["Python 3년 이상", "AWS 경험"],
+        },
+        {
+            "title": "이런 분이면 더 좋아요 (우대사항)",
+            "contents": ["FastAPI 경험자 우대"],
+        },
+        {
+            "title": "주요업무",
+            "contents": ["서비스 개발"],
+        },
+    ],
+}
+
+
+def test_parse_nhn_detail():
+    parsed = NHNDetailSyncer._parse_nhn_detail(RAW_NHN_DETAIL)
+    assert parsed["requirements"] == "Python 3년 이상\nAWS 경험"
+    assert parsed["preferred_points"] == "FastAPI 경험자 우대"
+    assert len(parsed["skill_tags"]) == 2
+    tag_names = {t["text"] for t in parsed["skill_tags"]}
+    assert "QA" in tag_names
+    assert "Backend" in tag_names
+
+
+def test_parse_nhn_detail_missing_sections():
+    raw = {"id": "1", "jobSeries": [], "jobPostingContentsItems": []}
+    parsed = NHNDetailSyncer._parse_nhn_detail(raw)
+    assert parsed["requirements"] is None
+    assert parsed["preferred_points"] is None
+    assert parsed["skill_tags"] == []
 
 
 def test_parse_nhn_applications_skips_incomplete():
