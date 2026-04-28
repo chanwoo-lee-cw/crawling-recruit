@@ -76,18 +76,20 @@ def test_save_preset_returns_error_on_invalid_key():
 from tools.sync_job_details import sync_job_details
 
 
-async def test_sync_job_details_processes_missing():
+def test_sync_job_details_processes_missing():
     with patch("tools.sync_job_details.get_engine"), \
-         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.asyncio.sleep") as mock_sleep:
+         patch("services.wanted.wanted_detail_syncer.time.sleep") as mock_sleep:
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.list_keywords.return_value = []
+        mock_service.enrich_skill_tags.side_effect = lambda d, kw: d
         mock_service.upsert_job_details.return_value = "완료: 2개 처리"
         MockService.return_value = mock_service
 
-        mock_client = AsyncMock()
+        mock_client = MagicMock()
         mock_client.fetch_job_detail.side_effect = [
             JobDetail(job_id=101, requirements="req1", preferred_points="pref1", skill_tags=[]),
             JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
@@ -95,18 +97,18 @@ async def test_sync_job_details_processes_missing():
         MockClient.return_value = mock_client
 
         from tools.sync_job_details import sync_job_details
-        result = await sync_job_details()
+        result = sync_job_details()
 
     assert "2개 처리" in result
     assert mock_client.fetch_job_detail.call_count == 2
     mock_sleep.assert_called_once_with(CRAWL_DELAY_SECONDS)
 
 
-async def test_sync_job_details_skips_failed_fetch():
+def test_sync_job_details_skips_failed_fetch():
     with patch("tools.sync_job_details.get_engine"), \
-         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.asyncio.sleep"):
+         patch("services.wanted.wanted_detail_syncer.time.sleep"):
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
@@ -115,7 +117,7 @@ async def test_sync_job_details_skips_failed_fetch():
         mock_service.upsert_job_details.return_value = "완료: 1개 처리"
         MockService.return_value = mock_service
 
-        mock_client = AsyncMock()
+        mock_client = MagicMock()
         mock_client.fetch_job_detail.side_effect = [
             None,
             JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
@@ -123,40 +125,11 @@ async def test_sync_job_details_skips_failed_fetch():
         MockClient.return_value = mock_client
 
         from tools.sync_job_details import sync_job_details
-        result = await sync_job_details()
+        result = sync_job_details()
 
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
     assert called_details[0].job_id == 102
-
-
-async def test_sync_job_details_calls_enrich_for_each_detail():
-    detail_101 = JobDetail(job_id=101, requirements="Python 경험", preferred_points=None, skill_tags=[])
-    detail_102 = JobDetail(job_id=102, requirements="Java 경험", preferred_points=None, skill_tags=[])
-
-    with patch("tools.sync_job_details.get_engine"), \
-         patch("tools.sync_job_details.WantedClient") as MockClient, \
-         patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.asyncio.sleep"):
-
-        mock_service = MagicMock()
-        mock_service.get_jobs_without_details.return_value = [101, 102]
-        mock_service.list_keywords.return_value = ["Python", "Java"]
-        mock_service.enrich_skill_tags.side_effect = lambda d, kw: d
-        mock_service.upsert_job_details.return_value = "완료: 2개 처리"
-        MockService.return_value = mock_service
-
-        mock_client = AsyncMock()
-        mock_client.fetch_job_detail.side_effect = [detail_101, detail_102]
-        MockClient.return_value = mock_client
-
-        from tools.sync_job_details import sync_job_details
-        await sync_job_details()
-
-    mock_service.list_keywords.assert_called_once()
-    assert mock_service.enrich_skill_tags.call_count == 2
-    mock_service.enrich_skill_tags.assert_any_call(detail_101, ["Python", "Java"])
-    mock_service.enrich_skill_tags.assert_any_call(detail_102, ["Python", "Java"])
 
 
 def test_sync_job_details_calls_enrich_for_each_detail():
@@ -164,9 +137,9 @@ def test_sync_job_details_calls_enrich_for_each_detail():
     detail_102 = JobDetail(job_id=102, requirements="Java 경험", preferred_points=None, skill_tags=[])
 
     with patch("tools.sync_job_details.get_engine"), \
-         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.time.sleep"):
+         patch("services.wanted.wanted_detail_syncer.time.sleep"):
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]

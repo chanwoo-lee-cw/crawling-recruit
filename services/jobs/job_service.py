@@ -225,6 +225,7 @@ class JobService:
     @transactional()
     def get_jobs_without_details(
         self,
+        source: str = WANTED,
         job_ids: list[int] | None = None,
         limit: int | None = None,
     ) -> list[int]:
@@ -233,7 +234,7 @@ class JobService:
             existing = JobDetailRepository(session).find_existing_job_ids(job_ids)
             missing = [jid for jid in job_ids if jid not in existing]
             return missing[:limit] if limit is not None else missing
-        return JobRepository(session).find_without_details(source=WANTED, limit=limit)
+        return JobRepository(session).find_without_details(source=source, limit=limit)
 
     @transactional()
     def get_unapplied_jobs(
