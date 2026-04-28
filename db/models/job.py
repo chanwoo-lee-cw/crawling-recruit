@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Boolean, DateTime, UniqueConstraint
+from sqlalchemy import BigInteger, Integer, String, Boolean, DateTime, UniqueConstraint
 from db.models.base import Base
 from services.wanted.wanted_constants import WANTED
 
@@ -10,7 +10,7 @@ class Job(Base):
     __tablename__ = "jobs"
     internal_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default=WANTED)
-    platform_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    platform_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     company_id: Mapped[Optional[int]] = mapped_column(Integer)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
