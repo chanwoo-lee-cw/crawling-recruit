@@ -78,9 +78,9 @@ from tools.sync_job_details import sync_job_details
 
 def test_sync_job_details_processes_missing():
     with patch("tools.sync_job_details.get_engine"), \
-         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.time.sleep") as mock_sleep:
+         patch("services.wanted.wanted_detail_syncer.time.sleep") as mock_sleep:
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
@@ -103,9 +103,9 @@ def test_sync_job_details_processes_missing():
 
 def test_sync_job_details_skips_failed_fetch():
     with patch("tools.sync_job_details.get_engine"), \
-         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.time.sleep"):
+         patch("services.wanted.wanted_detail_syncer.time.sleep"):
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
