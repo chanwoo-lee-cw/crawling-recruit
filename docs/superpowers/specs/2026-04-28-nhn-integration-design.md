@@ -62,20 +62,27 @@ platform_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 ### migrate_bigint()
 
-`db/connection.py`에 멱등 마이그레이션 함수 추가:
+`db/connection.py`에 멱등 마이그레이션 함수 추가. 각 테이블을 독립적으로 체크하여 부분 마이그레이션 상황에서도 안전하게 동작한다:
 
 ```python
 def migrate_bigint(engine) -> str:
-    with engine.connect() as conn:
-        result = conn.execute(text(
-            "SELECT DATA_TYPE FROM information_schema.COLUMNS "
-            "WHERE TABLE_NAME='jobs' AND COLUMN_NAME='platform_id' AND TABLE_SCHEMA=DATABASE()"
+    def is_bigint(conn, table):
+        r = conn.execute(text(
+            f"SELECT DATA_TYPE FROM information_schema.COLUMNS "
+            f"WHERE TABLE_NAME='{table}' AND COLUMN_NAME='platform_id' AND TABLE_SCHEMA=DATABASE()"
         ))
-        row = result.fetchone()
-        if row and row[0].lower() == "bigint":
+        row = r.fetchone()
+        return row and row[0].lower() == "bigint"
+
+    with engine.connect() as conn:
+        jobs_done = is_bigint(conn, "jobs")
+        apps_done = is_bigint(conn, "applications")
+        if jobs_done and apps_done:
             return "BigInteger 마이그레이션 이미 완료됨"
-        conn.execute(text("ALTER TABLE jobs MODIFY platform_id BIGINT NOT NULL"))
-        conn.execute(text("ALTER TABLE applications MODIFY platform_id BIGINT NOT NULL"))
+        if not jobs_done:
+            conn.execute(text("ALTER TABLE jobs MODIFY platform_id BIGINT NOT NULL"))
+        if not apps_done:
+            conn.execute(text("ALTER TABLE applications MODIFY platform_id BIGINT NOT NULL"))
         conn.commit()
     return "BigInteger 마이그레이션 완료"
 ```
@@ -130,7 +137,10 @@ class NHNClient:
     def fetch_job_detail(job_id: str): ...  # GET job-postings/{id}
 ```
 
-`fetch_jobs()`는 `page` 증가로 페이지네이션. `result`가 빈 배열이거나 `limit_pages` 도달 시 중단.
+`fetch_jobs()`는 `page` 증가로 페이지네이션. 다음 조건 중 하나를 만족하면 중단:
+- `result`가 빈 배열
+- `len(result) < size` (부분 페이지 = 마지막 페이지)
+- `limit_pages` 도달
 
 ---
 
@@ -141,7 +151,7 @@ class NHNClient:
 | NHN 응답 필드 | Job 모델 필드 |
 |---|---|
 | `int(raw["id"])` | `platform_id` |
-| `int(raw["corporation"]["id"])` | `company_id` |
+| `None` | `company_id` (corporation.id는 int64로 32-bit Integer 컬럼에 저장 불가) |
 | `raw["corporation"]["name"]` | `company_name` |
 | `raw["name"]` | `title` |
 | `raw["employeeType"]["name"]` via `EMPLOYMENT_TYPE_MAP` | `employment_type` |
@@ -154,10 +164,17 @@ class NHNClient:
 jobPostingId  → job_platform_id: int(raw["jobPostingId"])
 applicationId → platform_id:     int(raw["applicationId"])
 displayStepButtonCd → status
-finalSubmitDatetime → apply_time_str
+finalSubmitDatetime → apply_time_str (정규화 필요, 아래 참고)
 ```
 
 `finalSubmitYn == "N"` (미완료 지원)은 skip한다.
+
+`finalSubmitDatetime`은 `"2026-04-20 12:18"` 형식(초 없음)으로 내려온다. `upsert_applications`의 `datetime.fromisoformat()` 호환성을 보장하기 위해 `_parse_nhn_applications`에서 정규화한다:
+```python
+apply_time_str = raw.get("finalSubmitDatetime")
+if apply_time_str and len(apply_time_str) == 16:
+    apply_time_str = apply_time_str + ":00"
+```
 
 ### `_parse_nhn_detail(raw_detail)` (NHNDetailSyncer 내부)
 
@@ -168,7 +185,7 @@ finalSubmitDatetime → apply_time_str
 | `"자격요건"` | `requirements` (contents 리스트 `"\n".join`) |
 | `"우대사항"` | `preferred_points` |
 
-`skill_tags`: `jobSeries[].name` → `[{"text": "Backend"}, ...]`
+`skill_tags`: `jobSeries[].name`을 `id` 기준으로 중복 제거 후 → `[{"text": "Backend"}, ...]`. API 응답에서 동일 jobSeries가 중복 포함될 수 있음.
 
 ---
 
@@ -196,7 +213,9 @@ def sync_job_details(source: str = WANTED, job_ids=None, limit=None) -> str:
 
 ### `JobService.get_jobs_without_details()` 수정
 
-`source` 파라미터 추가 — NHN 공고도 조회 가능하게 한다.
+`source` 파라미터 추가. 동작 규칙:
+- `job_ids is None`인 경우: `JobRepository.find_without_details(source=source, ...)` 호출 (기존 하드코딩 `WANTED` 제거)
+- `job_ids is not None`인 경우: source 무관하게 제공된 ID 목록 기준으로 조회 (기존 동작 유지)
 
 ---
 
@@ -242,6 +261,8 @@ class NHNClientConst:
 ```
 
 `job_service.py`의 `JOB_BASE_URLS`에 `NHN: NHN_JOB_BASE_URL` 추가.
+
+`ALLOWED_PRESET_KEYS`에 `"job_series_ids"` 추가 (NHN 프리셋 저장 지원).
 
 ---
 
