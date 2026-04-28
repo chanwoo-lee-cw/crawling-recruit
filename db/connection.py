@@ -97,3 +97,26 @@ def migrate(engine) -> str:
         conn.commit()
 
     return "마이그레이션 완료"
+
+
+def migrate_bigint(engine) -> str:
+    """jobs, applications의 platform_id를 BIGINT로 변환. 멱등."""
+    def is_bigint(conn, table):
+        r = conn.execute(text(
+            f"SELECT DATA_TYPE FROM information_schema.COLUMNS "
+            f"WHERE TABLE_NAME='{table}' AND COLUMN_NAME='platform_id' AND TABLE_SCHEMA=DATABASE()"
+        ))
+        row = r.fetchone()
+        return row and row[0].lower() == "bigint"
+
+    with engine.connect() as conn:
+        jobs_done = is_bigint(conn, "jobs")
+        apps_done = is_bigint(conn, "applications")
+        if jobs_done and apps_done:
+            return "BigInteger 마이그레이션 이미 완료됨"
+        if not jobs_done:
+            conn.execute(text("ALTER TABLE jobs MODIFY platform_id BIGINT NOT NULL"))
+        if not apps_done:
+            conn.execute(text("ALTER TABLE applications MODIFY platform_id BIGINT NOT NULL"))
+        conn.commit()
+    return "BigInteger 마이그레이션 완료"
