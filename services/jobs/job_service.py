@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from db.models import SearchPreset
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
+from services.nhn.nhn_constants import NHN, NHN_JOB_BASE_URL
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -18,6 +19,7 @@ from domain import JobCandidate, JobDetail
 ALLOWED_PRESET_KEYS = {
     "job_group_id", "job_ids", "years", "locations", "limit_pages",
     "job_category_names", "min_experience", "max_experience", "source",
+    "job_series_ids",
 }
 WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
 REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"
@@ -25,12 +27,14 @@ REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"
 JOB_BASE_URLS = {
     WANTED: WANTED_JOB_BASE_URL,
     REMEMBER: REMEMBER_JOB_BASE_URL,
+    NHN: NHN_JOB_BASE_URL,
 }
 
 
 class JobService:
     EMPLOYMENT_TYPE_MAP = {
         "정규직": "regular",
+        "정규": "regular",
         "인턴": "intern",
         "계약직": "contract",
     }
@@ -93,9 +97,49 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_nhn_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        emp_type_raw = (raw.get("employeeType") or {}).get("name")
+        employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_type_raw) if emp_type_raw else None
+        return {
+            "source": NHN,
+            "platform_id": int(raw["id"]),
+            "company_id": None,
+            "company_name": raw["corporation"]["name"],
+            "title": raw["name"],
+            "location": None,
+            "employment_type": employment_type,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
+    def _parse_nhn_applications(self, raw_apps: list[dict]) -> list[dict]:
+        result = []
+        for raw in raw_apps:
+            if raw.get("finalSubmitYn") != "Y":
+                continue
+            apply_time_str = raw.get("finalSubmitDatetime")
+            if apply_time_str and len(apply_time_str) == 16:
+                apply_time_str = apply_time_str + ":00"
+            result.append({
+                "job_platform_id": int(raw["jobPostingId"]),
+                "platform_id": int(raw["applicationId"]),
+                "status": raw.get("displayStepButtonCd", ""),
+                "apply_time_str": apply_time_str,
+            })
+        return result
+
     def _parse_job(self, raw: dict, source: str = WANTED) -> dict:
         if source == REMEMBER:
             return self._parse_remember_job(raw)
+        if source == NHN:
+            return self._parse_nhn_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
@@ -126,6 +170,8 @@ class JobService:
     def _parse_applications(self, raw_apps: list[dict], source: str) -> list[dict]:
         if source == REMEMBER:
             return self._parse_remember_applications(raw_apps)
+        if source == NHN:
+            return self._parse_nhn_applications(raw_apps)
         return self._parse_wanted_applications(raw_apps)
 
     @transactional()
