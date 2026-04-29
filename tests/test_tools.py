@@ -6,12 +6,14 @@ from services.wanted.wanted_constants import WANTED
 
 
 def test_sync_jobs_uses_preset_when_given():
-    with patch("tools.wanted_sync_jobs.get_engine") as mock_engine, \
+    with patch("tools.wanted_sync_jobs.get_engine"), \
          patch("services.wanted.wanted_syncer.WantedClient") as mock_client_cls, \
          patch("tools.wanted_sync_jobs.JobService") as mock_service_cls:
 
+        mock_preset = MagicMock()
+        mock_preset.params = {"job_group_id": 519}
         mock_service = MagicMock()
-        mock_service.get_preset_params.return_value = {"job_group_id": 519}
+        mock_service.get_preset_params.return_value = mock_preset
         mock_service.upsert_jobs.return_value = "동기화 완료: 신규/변경 5개, 총 5개 처리"
         mock_service_cls.return_value = mock_service
 
@@ -20,9 +22,9 @@ def test_sync_jobs_uses_preset_when_given():
         mock_client_cls.return_value = mock_client
 
         from tools.wanted_sync_jobs import wanted_sync_jobs
-        result = wanted_sync_jobs(preset_name="백엔드 신입")
+        result = wanted_sync_jobs()
 
-    mock_service.get_preset_params.assert_called_once_with("백엔드 신입")
+    mock_service.get_preset_params.assert_called_once_with(WANTED)
     mock_service.upsert_jobs.assert_called_once()
     call_kwargs = mock_client.fetch_jobs.call_args.kwargs
     assert call_kwargs.get("job_group_id") == 519
@@ -83,14 +85,14 @@ def test_sync_job_details_processes_missing():
          patch("services.wanted.wanted_detail_syncer.time.sleep") as mock_sleep:
 
         mock_service = MagicMock()
-        mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.get_jobs_without_details.return_value = [(101, 1001), (102, 1002)]
         mock_service.upsert_job_details.return_value = "완료: 2개 처리"
         MockService.return_value = mock_service
 
         mock_client = MagicMock()
         mock_client.fetch_job_detail.side_effect = [
-            JobDetail(job_id=101, requirements="req1", preferred_points="pref1", skill_tags=[]),
-            JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
+            JobDetail(job_id=1001, requirements="req1", preferred_points="pref1", skill_tags=[]),
+            JobDetail(job_id=1002, requirements="req2", preferred_points=None, skill_tags=[]),
         ]
         MockClient.return_value = mock_client
 
@@ -108,14 +110,14 @@ def test_sync_job_details_skips_failed_fetch():
          patch("services.wanted.wanted_detail_syncer.time.sleep"):
 
         mock_service = MagicMock()
-        mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.get_jobs_without_details.return_value = [(101, 1001), (102, 1002)]
         mock_service.upsert_job_details.return_value = "완료: 1개 처리"
         MockService.return_value = mock_service
 
         mock_client = MagicMock()
         mock_client.fetch_job_detail.side_effect = [
             None,  # 101 실패
-            JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
+            JobDetail(job_id=1002, requirements="req2", preferred_points=None, skill_tags=[]),
         ]
         MockClient.return_value = mock_client
 
@@ -123,7 +125,7 @@ def test_sync_job_details_skips_failed_fetch():
 
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
-    assert called_details[0].job_id == 102  # 속성 접근
+    assert called_details[0].job_id == 102  # internal_id로 저장
 
 
 def test_skip_jobs_tool_calls_service():
@@ -329,4 +331,5 @@ def test_get_job_candidates_passes_include_evaluated():
         location=None,
         employment_type=None,
         include_evaluated=True,
+        source=None,
     )

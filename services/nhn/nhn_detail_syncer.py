@@ -18,22 +18,22 @@ class NHNDetailSyncer(BaseSyncer):
         except ValueError as e:
             return str(e)
 
-        target_ids = self.service.get_jobs_without_details(
+        target_pairs = self.service.get_jobs_without_details(
             source=NHN, job_ids=job_ids, limit=limit
         )
-        if not target_ids:
+        if not target_pairs:
             return "처리할 공고가 없습니다."
 
         fetched: list[JobDetail] = []
-        for i, job_id in enumerate(target_ids):
+        for i, (internal_id, platform_id) in enumerate(target_pairs):
             if i > 0:
                 time.sleep(CRAWL_DELAY_SECONDS)
-            raw_detail = client.fetch_job_detail(str(job_id))
+            raw_detail = client.fetch_job_detail(str(platform_id))
             if raw_detail is None:
                 continue
             parsed = self._parse_nhn_detail(raw_detail)
             fetched.append(JobDetail(
-                job_id=job_id,
+                job_id=internal_id,
                 requirements=parsed["requirements"],
                 preferred_points=parsed["preferred_points"],
                 skill_tags=parsed["skill_tags"],

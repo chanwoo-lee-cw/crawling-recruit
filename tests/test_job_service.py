@@ -126,19 +126,22 @@ def test_get_unapplied_job_rows_returns_list():
 def test_get_jobs_without_details_filters_existing():
     mock_session = MagicMock()
     mock_session.scalars.return_value.all.return_value = [101]
+    pair_rows = [MagicMock(internal_id=102, platform_id=1102), MagicMock(internal_id=103, platform_id=1103)]
+    mock_session.execute.return_value.all.return_value = pair_rows
     service = JobService(engine=MagicMock())
     with test_session_context(mock_session):
         result = service.get_jobs_without_details(job_ids=[101, 102, 103], limit=2)
-    assert result == [102, 103]
+    assert result == [(102, 1102), (103, 1103)]
 
 
 def test_get_jobs_without_details_no_job_ids():
     mock_session = MagicMock()
-    mock_session.scalars.return_value.all.return_value = [201, 202]
+    pair_rows = [MagicMock(internal_id=201, platform_id=2001), MagicMock(internal_id=202, platform_id=2002)]
+    mock_session.execute.return_value.all.return_value = pair_rows
     service = JobService(engine=MagicMock())
     with test_session_context(mock_session):
         result = service.get_jobs_without_details(limit=10)
-    assert result == [201, 202]
+    assert result == [(201, 2001), (202, 2002)]
 
 
 def test_get_recommended_jobs_scores_skill_tags():
