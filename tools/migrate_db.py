@@ -13,3 +13,8 @@ def migrate_db() -> str:
         return f"{result1} / {result2}"
     except Exception as e:
         return f"마이그레이션 오류: {e}"
+
+
+
+if __name__ == "__main__":
+    migrate_db()
