@@ -83,7 +83,8 @@ if source == KAKAO_BANK:
 | `"우대사항"` 포함 | `preferred_points` | 동일 |
 | 기타 | - | 무시 |
 
-`skill_tags` → 빈 리스트 (구조화된 태그 데이터 없음)  
+`skill_tags` → requirements 텍스트를 `·` / `\n` 으로 split 후 각 줄을 `{"text": "..."}` 형태로 저장 (rough tags).  
+AI 기반 정제는 별도 `generate_skill_tags` 툴(전체 소스 공통, 별개 스펙)에서 처리.  
 섹션 못 찾으면 해당 필드 NULL.
 
 ### 공고 URL
