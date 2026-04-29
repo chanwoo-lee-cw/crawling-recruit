@@ -274,13 +274,16 @@ class JobService:
         source: str = WANTED,
         job_ids: list[int] | None = None,
         limit: int | None = None,
-    ) -> list[int]:
+    ) -> list[tuple[int, int]]:
         session = get_current_session()
+        repo = JobRepository(session)
         if job_ids is not None:
             existing = JobDetailRepository(session).find_existing_job_ids(job_ids)
             missing = [jid for jid in job_ids if jid not in existing]
-            return missing[:limit] if limit is not None else missing
-        return JobRepository(session).find_without_details(source=source, limit=limit)
+            if limit is not None:
+                missing = missing[:limit]
+            return repo.find_internal_platform_pairs(missing)
+        return repo.find_without_details(source=source, limit=limit)
 
     @transactional()
     def get_unapplied_jobs(
@@ -317,6 +320,7 @@ class JobService:
         location: str | None = None,
         employment_type: str | None = None,
         include_evaluated: bool = False,
+        source: str | None = None,
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
@@ -325,8 +329,46 @@ class JobService:
             location=location,
             employment_type=employment_type,
             include_evaluated=include_evaluated,
+            source=source,
         )
         return [JobCandidate.from_row(r) for r in rows]
+
+    @staticmethod
+    def _extract_years_range(text: str | None) -> tuple[int | None, int | None]:
+        """requirements 텍스트에서 경력 범위 추출. (min, max) 반환, None은 제한 없음."""
+        if not text:
+            return None, None
+        if re.search(r'경력\s*무관|신입.*경력|경력.*신입|무관', text):
+            return None, None
+        m = re.search(r'(\d+)\s*년\s*[~～]\s*(\d+)\s*년', text)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+        m = re.search(r'(\d+)\s*[~～]\s*(\d+)\s*년', text)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+        m = re.search(r'(\d+)\s*년\s*이상', text)
+        if m:
+            return int(m.group(1)), None
+        m = re.search(r'(\d+)\s*년\s*이하', text)
+        if m:
+            return None, int(m.group(1))
+        return None, None
+
+    @staticmethod
+    def filter_by_years(candidates: list[JobCandidate], years: int) -> list[JobCandidate]:
+        """주어진 경력(년수)으로 지원 가능한 공고만 반환. 경력 정보 없으면 포함."""
+        result = []
+        for c in candidates:
+            req_min, req_max = JobService._extract_years_range(c.requirements)
+            if req_min is None and req_max is None:
+                result.append(c)
+            elif req_min is not None and years < req_min:
+                continue
+            elif req_max is not None and years > req_max:
+                continue
+            else:
+                result.append(c)
+        return result
 
     @transactional()
     def skip_jobs(self, job_ids: list[int], reason: str | None = None) -> str:

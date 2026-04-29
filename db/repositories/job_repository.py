@@ -52,9 +52,17 @@ class JobRepository:
         ).all()
         return {row.platform_id: row.internal_id for row in rows}
 
-    def find_without_details(self, source: str, limit: int | None = None) -> list[int]:
+    def find_internal_platform_pairs(self, internal_ids: list[int]) -> list[tuple[int, int]]:
+        rows = self.session.execute(
+            select(Job.internal_id, Job.platform_id)
+            .where(Job.internal_id.in_(internal_ids))
+        ).all()
+        order = {iid: i for i, iid in enumerate(internal_ids)}
+        return sorted([(r.internal_id, r.platform_id) for r in rows], key=lambda x: order[x[0]])
+
+    def find_without_details(self, source: str, limit: int | None = None) -> list[tuple[int, int]]:
         stmt = (
-            select(Job.internal_id)
+            select(Job.internal_id, Job.platform_id)
             .outerjoin(OrmJobDetail, Job.internal_id == OrmJobDetail.job_id)
             .where(OrmJobDetail.job_id.is_(None))
             .where(Job.is_active.is_(True))
@@ -63,7 +71,7 @@ class JobRepository:
         )
         if limit is not None:
             stmt = stmt.limit(limit)
-        return list(self.session.scalars(stmt).all())
+        return [(row.internal_id, row.platform_id) for row in self.session.execute(stmt).all()]
 
     def find_unapplied(
         self,
@@ -101,6 +109,7 @@ class JobRepository:
         location: str | None = None,
         employment_type: str | None = None,
         include_evaluated: bool = False,
+        source: str | None = None,
     ) -> list:
         applied_pairs = (
             select(Job.company_name, Job.title)
@@ -128,4 +137,6 @@ class JobRepository:
             stmt = stmt.where(Job.location.ilike(f"%{location}%"))
         if employment_type:
             stmt = stmt.where(Job.employment_type == employment_type)
+        if source:
+            stmt = stmt.where(Job.source == source)
         return self.session.execute(stmt).mappings().all()

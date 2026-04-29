@@ -91,10 +91,11 @@ def test_job_find_platform_id_map():
 
 def test_job_find_without_details():
     mock_session = MagicMock()
-    mock_session.scalars.return_value.all.return_value = [201, 202]
+    pair_rows = [MagicMock(internal_id=201, platform_id=2001), MagicMock(internal_id=202, platform_id=2002)]
+    mock_session.execute.return_value.all.return_value = pair_rows
     repo = JobRepository(mock_session)
     result = repo.find_without_details("wanted", limit=10)
-    assert result == [201, 202]
+    assert result == [(201, 2001), (202, 2002)]
 
 
 def test_job_find_unapplied_returns_rows():
