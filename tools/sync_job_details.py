@@ -20,3 +20,7 @@ def sync_job_details(
     if source == NHN:
         return NHNDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
     return WantedDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
+
+
+if __name__ == "__main__":
+    sync_job_details(NHN)
