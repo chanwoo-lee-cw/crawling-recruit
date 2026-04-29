@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.nhn.nhn_constants import NHN
+from tools.nhn_sync_jobs import nhn_sync_jobs
 from services.remember.remember_constants import REMEMBER, RememberJobCategory
 from services.wanted.wanted_constants import WANTED, WantedJobSort
 from tools.remember_sync_jobs import remember_sync_jobs
@@ -17,7 +19,11 @@ from tools.wanted_sync_jobs import wanted_sync_jobs
 from tools.sync_job_details import sync_job_details
 from tools.sync_applications import sync_applications
 
-SOURCES = [WANTED, REMEMBER]
+SOURCES = [
+    NHN,
+    WANTED,
+    REMEMBER
+]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.makedirs(os.path.join(_PROJECT_ROOT, "logs"), exist_ok=True)
@@ -38,6 +44,8 @@ async def run():
                 await wanted_sync()
             elif source == REMEMBER:
                 await remember_sync()
+            elif source == NHN:
+                nhn_sync()
             else:
                 raise RuntimeError(f"정의되지 않은 source[{source}] 입니다.")
             synced_count += 1
@@ -47,11 +55,12 @@ async def run():
     if synced_count == 0:
         log("모든 sync_jobs 실패 - sync_job_details 스킵")
     else:
-        try:
-            result = await sync_job_details()
-            log(f"sync_job_details: {result}")
-        except Exception as e:
-            log(f"sync_job_details: 오류 - {e}")
+        for src in SOURCES:
+            try:
+                result = sync_job_details(source=src)
+                log(f"sync_job_details({src}): {result}")
+            except Exception as e:
+                log(f"sync_job_details({src}): 오류 - {e}")
 
     for source in SOURCES:
         try:
@@ -80,6 +89,15 @@ async def remember_sync():
         log(f"remember_sync_jobs: {result}")
     except Exception as e:
         log(f"remember_sync_jobs: 오류 - {e}")
+        
+        
+def nhn_sync():
+    try:
+        result = nhn_sync_jobs()
+        log(f"nhn_sync_jobs: {result}")
+    except Exception as e:
+        log(f"nhn_sync_jobs: 오류 - {e}")
+
 
 
 if __name__ == "__main__":
