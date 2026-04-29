@@ -27,7 +27,8 @@ tools/
 ```
 tools/sync_job_details.py      # kakaobank 분기 추가 + docstring 업데이트
 services/jobs/job_service.py   # _parse_kakaobank_job 추가, _parse_job 분기 추가,
-                               # JOB_BASE_URLS 추가, 링크 생성 예외 분기 추가
+                               # JOB_BASE_URLS 추가, build_job_url 헬퍼 추가
+tools/get_job_candidates.py    # build_job_url 헬퍼로 교체
 main.py                        # kakaobank_sync_jobs 등록
 requirements.txt               # beautifulsoup4 추가
 ```
@@ -44,7 +45,7 @@ requirements.txt               # beautifulsoup4 추가
 
 **상세:** `GET https://recruit.kakaobank.com/api/recruits/{recruitNoticeSn}`
 - 인증 불필요
-- 응답 내 `contents` 필드: HTML 문자열
+- 응답: 목록의 모든 필드 + `contents`(HTML 문자열) + `relatedNotices`
 
 ---
 
@@ -71,31 +72,40 @@ if source == KAKAO_BANK:
 
 ### 상세 API → `job_details` 테이블
 
-`contents` HTML을 `BeautifulSoup(html, "html.parser")`로 파싱 (stdlib html.parser 사용, 추가 의존성 없음):
+`contents` HTML 파싱 전략:
+- `BeautifulSoup(html, "html.parser")` 사용 (stdlib, lxml 불필요)
+- HTML 구조: `div.desc_cont` 반복 블록, 각 블록에 `div.tit`(섹션명) + `div.cont`(내용)
+- 섹션 이름으로 내용 추출:
 
-| 추출 대상 | 방법 |
-|---|---|
-| `requirements` | "자격요건" 섹션 텍스트 |
-| `preferred_points` | "우대사항" 섹션 텍스트 |
-| `skill_tags` | 빈 리스트 (HTML에서 구조화된 태그 추출 불가) |
+| 섹션명(`div.tit` 텍스트) | 추출 대상 | 처리 |
+|---|---|---|
+| `"필수 경험과 역량"` 포함 | `requirements` | `div.cont` 내 `<p>` 태그 텍스트 줄바꿈 결합 |
+| `"우대사항"` 포함 | `preferred_points` | 동일 |
+| 기타 | - | 무시 |
 
+`skill_tags` → 빈 리스트 (구조화된 태그 데이터 없음)  
 섹션 못 찾으면 해당 필드 NULL.
 
 ### 공고 URL
 
-카카오뱅크 URL 형식이 기존 `{base_url}/{platform_id}` 패턴과 다름. `job_service.py`에 `build_job_url(source, platform_id)` 공개 헬퍼 메서드를 추가하고, URL을 생성하는 **모든** 코드 경로에서 이 헬퍼를 사용하도록 교체:
+카카오뱅크 URL 형식이 기존 `{base_url}/{platform_id}` 패턴과 다름.  
+`job_service.py`에 `build_job_url(source, platform_id)` 공개 헬퍼를 추가하고,  
+URL을 생성하는 **모든** 코드 경로에서 이 헬퍼를 사용하도록 교체:
 
 ```python
 def build_job_url(self, source: str, platform_id: int) -> str:
     if source == KAKAO_BANK:
-        return f"https://kakaobank.recruiter.co.kr/app/jobnotice/view?systemKindCode=MRS2&jobnoticeSn={platform_id}"
+        return (
+            f"https://kakaobank.recruiter.co.kr/app/jobnotice/view"
+            f"?systemKindCode=MRS2&jobnoticeSn={platform_id}"
+        )
     base_url = JOB_BASE_URLS.get(source, WANTED_JOB_BASE_URL)
     return f"{base_url}/{platform_id}"
 ```
 
-교체 대상 코드 경로:
+교체 대상:
 - `job_service.py` line 307-308: `get_unapplied_jobs` 내 인라인 URL 빌딩
-- `tools/get_job_candidates.py` line 50: `JOB_BASE_URLS.get(...)/{platform_id}` 인라인 → `service.build_job_url(c.source, c.platform_id)` 로 교체
+- `tools/get_job_candidates.py` line 50: 인라인 → `service.build_job_url(c.source, c.platform_id)`
 
 ---
 
@@ -104,15 +114,14 @@ def build_job_url(self, source: str, platform_id: int) -> str:
 ```
 Step 1: kakaobank_sync_jobs
   - pageNumber=0 부터 시작, pageNumber < totalPages 동안 반복
-  - full_sync=True → 응답에 없는 공고 자동 is_active=False
-  - 카카오뱅크 목록 API는 마감된 공고를 제외하므로 full_sync로 비활성화 정확함
+  - full_sync=True → 목록에 없는 공고 자동 is_active=False
+    (카카오뱅크 목록 API는 마감 공고를 제외하므로 full_sync 정확)
 
 Step 2: sync_job_details (source="kakaobank")
   - fetched_at IS NULL 공고만 대상
   - GET /api/recruits/{platform_id} 호출
   - 요청 사이 CRAWL_DELAY_SECONDS 대기 (NHN 패턴 동일)
-  - contents HTML → BeautifulSoup(html, "html.parser") 파싱
-  - job_details upsert
+  - contents HTML → BeautifulSoup 파싱 → job_details upsert
 ```
 
 ---
