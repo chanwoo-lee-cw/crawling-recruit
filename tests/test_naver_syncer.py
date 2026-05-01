@@ -15,9 +15,7 @@ def test_syncer_calls_upsert_with_full_sync_true_when_no_limit():
 
 def test_syncer_calls_upsert_with_full_sync_false_when_limit_set():
     service = MagicMock()
-    syncer = NaverSyncer.__new__(NaverSyncer)
-    syncer.service = service
     with patch("services.naver.naver_syncer.NaverClient") as MockClient:
         MockClient.return_value.fetch_jobs.return_value = MOCK_JOBS
-        syncer.sync(limit_pages=2)
+        NaverSyncer(service).sync(limit_pages=2)
     service.upsert_jobs.assert_called_once_with(MOCK_JOBS, source=NAVER, full_sync=False)
