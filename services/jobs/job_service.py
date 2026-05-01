@@ -46,6 +46,7 @@ class JobService:
         "정규": "regular",
         "인턴": "intern",
         "계약직": "contract",
+        "계약": "contract",
     }
     VALID_VERDICTS = {"good", "pass", "skip"}
 
@@ -128,6 +129,28 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_naver_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        emp_type_raw = raw.get("empTypeCdNm")
+        employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_type_raw) if emp_type_raw else None
+        return {
+            "source": NAVER,
+            "platform_id": int(raw["annoId"]),
+            "company_id": None,
+            "company_name": raw["sysCompanyCdNm"],
+            "title": raw["annoSubject"],
+            "location": None,
+            "employment_type": employment_type,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
     def _parse_nhn_applications(self, raw_apps: list[dict]) -> list[dict]:
         result = []
         for raw in raw_apps:
@@ -149,6 +172,8 @@ class JobService:
             return self._parse_remember_job(raw)
         if source == NHN:
             return self._parse_nhn_job(raw)
+        if source == NAVER:
+            return self._parse_naver_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:

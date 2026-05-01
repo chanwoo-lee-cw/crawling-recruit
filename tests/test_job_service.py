@@ -599,3 +599,44 @@ def test_build_job_url_wanted():
 def test_build_job_url_naver():
     url = build_job_url(NAVER, 30004786)
     assert url == "https://recruit.navercorp.com/rcrt/view.do?annoId=30004786"
+
+
+RAW_NAVER_JOB = {
+    "annoId": 30004786,
+    "sysCompanyCdNm": "NAVER",
+    "annoSubject": "[NAVER] 백엔드 개발자",
+    "empTypeCdNm": "정규",
+    "subJobCdNm": "Backend",
+}
+
+RAW_NAVER_JOB_CONTRACT = {
+    "annoId": 30004787,
+    "sysCompanyCdNm": "NAVER WEBTOON",
+    "annoSubject": "[웹툰] 마케터",
+    "empTypeCdNm": "계약",
+    "subJobCdNm": "Marketing",
+}
+
+def test_parse_naver_job():
+    service = JobService(engine=MagicMock())
+    row = service._parse_naver_job(RAW_NAVER_JOB)
+    assert row["source"] == NAVER
+    assert row["platform_id"] == 30004786
+    assert row["company_name"] == "NAVER"
+    assert row["title"] == "[NAVER] 백엔드 개발자"
+    assert row["employment_type"] == "regular"
+    assert row["location"] is None
+    assert row["company_id"] is None
+    assert row["is_active"] is True
+
+def test_parse_naver_job_contract():
+    service = JobService(engine=MagicMock())
+    row = service._parse_naver_job(RAW_NAVER_JOB_CONTRACT)
+    assert row["employment_type"] == "contract"
+    assert row["company_name"] == "NAVER WEBTOON"
+
+def test_parse_job_dispatcher_naver():
+    service = JobService(engine=MagicMock())
+    row = service._parse_job(RAW_NAVER_JOB, source=NAVER)
+    assert row["source"] == NAVER
+    assert row["platform_id"] == 30004786
