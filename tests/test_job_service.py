@@ -2,7 +2,8 @@ import pytest
 from unittest.mock import MagicMock
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
-from services.jobs.job_service import JobService
+from services.jobs.job_service import JobService, build_job_url
+from services.naver.naver_constants import NAVER
 from db.transaction import test_session_context
 from domain import JobCandidate, JobDetail, SkillTag
 
@@ -588,3 +589,13 @@ def test_enrich_skill_tags_word_boundary():
     texts = [t["text"] for t in result.skill_tags]
     assert "Python" not in texts
     assert "Java" in texts
+
+
+def test_build_job_url_wanted():
+    url = build_job_url(WANTED, 12345)
+    assert url == "https://www.wanted.co.kr/wd/12345"
+
+
+def test_build_job_url_naver():
+    url = build_job_url(NAVER, 30004786)
+    assert url == "https://recruit.navercorp.com/rcrt/view.do?annoId=30004786"
