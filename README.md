@@ -1,8 +1,8 @@
-# 채용공고 MCP 서버 (Wanted + Remember)
+# 채용공고 MCP 서버
 
-superpowers+바이브 코딩으로 작성한 프로젝트
-Claude Code에서 자연어로 호출해 Wanted·Remember의 미지원 채용공고를 수집하고 추천받는 MCP 서버.  
-MCP 서버는 데이터 제공만 담당하고, 2차 추론·추천은 Claude Code가 직접 수행한다.
+superpowers+바이브 코딩으로 작성한 프로젝트  
+Claude Code에서 자연어로 호출해 Wanted·Remember·NHN·Naver의 미지원 채용공고를 수집하고 추천받는 MCP 서버.  
+MCP 서버는 데이터 제공만 담당하고, 추론·추천은 Claude Code가 직접 수행한다.
 
 ---
 
@@ -52,6 +52,8 @@ REMEMBER_COOKIE=여기에_실제_쿠키_붙여넣기
 REMEMBER_AUTH_TOKEN=여기에_Token_값_입력
 ```
 
+> NHN·Naver는 공개 API라 별도 인증 정보 불필요.
+
 #### Wanted 쿠키 & User ID 가져오기
 
 1. [원티드](https://www.wanted.co.kr) 로그인
@@ -98,9 +100,12 @@ claude mcp list
 
 | 툴 | 주요 파라미터 | 설명 |
 |---|---|---|
-| `sync_jobs` | `source`, `preset_name`, `job_group_id`, `limit_pages` | 채용공고 동기화 (Wanted/Remember) |
-| `sync_applications` | `source` | 지원현황 동기화 |
-| `sync_job_details` | 없음 | 공고 상세 정보 배치 수집 (Wanted) |
+| `wanted_sync_jobs` | `preset_name`, `job_group_id`, `limit_pages` | 채용공고 동기화 (Wanted) |
+| `remember_sync_jobs` | `job_category_names`, `limit_pages` | 채용공고 동기화 (Remember) |
+| `nhn_sync_jobs` | `limit_pages` | 채용공고 동기화 (NHN) |
+| `naver_sync_jobs` | `limit_pages` | 채용공고 동기화 (Naver) |
+| `sync_applications` | `source` | 지원현황 동기화 (Wanted·Remember·NHN) |
+| `sync_job_details` | `source`, `job_ids`, `limit` | 공고 상세 정보 수집 |
 | `get_unapplied_jobs` | `job_group_id`, `location`, `employment_type`, `limit` | 미지원 공고 목록 (마크다운 테이블) |
 | `get_job_candidates` | `skills`, `top_n`, `include_evaluated` | skill 매칭 후보 JSON 반환 (Claude 2차 추론용) |
 | `save_job_evaluations` | `evaluations` | Claude 추천 결과 verdict 저장 |
@@ -116,10 +121,10 @@ claude mcp list
 매일 오후 10시에 전체 파이프라인이 자동으로 실행된다. 결과는 `logs/daily_sync.log`에 기록된다.
 
 ```
-sync_jobs(wanted) → sync_jobs(remember) → sync_job_details → sync_applications(wanted+remember)
+sync_jobs(nhn + wanted + remember + naver)
+  → sync_job_details(각 소스)
+  → sync_applications(nhn + wanted + remember)
 ```
-
-새 소스 추가 시 `scripts/daily_sync.py`의 `SOURCES`와 `SYNC_CONFIG`에 항목을 추가하면 된다.
 
 crontab 수동 확인:
 ```bash
@@ -133,12 +138,12 @@ crontab -l | grep daily_sync
 ### 처음 설정
 
 ```
-1. migrate_db             → 테이블 생성
-2. sync_applications      → 내 지원 이력 동기화 (이미 지원한 공고 제외 기준)
-3. sync_jobs              → 채용공고 수집 (원티드/리멤버)
-4. sync_job_details       → 공고 상세 정보 수집 (requirements, skill_tags)
-5. get_job_candidates     → skill 매칭 후 Claude 2차 추천
-6. save_job_evaluations   → 추천 결과 verdict 저장 (다음 세션에서 재처리 방지)
+1. migrate_db                 → 테이블 생성
+2. sync_applications          → 내 지원 이력 동기화 (이미 지원한 공고 제외 기준)
+3. wanted/remember/nhn/naver_sync_jobs → 채용공고 수집
+4. sync_job_details           → 공고 상세 정보 수집 (requirements, skill_tags)
+5. get_job_candidates         → skill 매칭 후 Claude 2차 추천
+6. save_job_evaluations       → 추천 결과 verdict 저장 (다음 세션에서 재처리 방지)
 ```
 
 ### 이후 정기 사용
@@ -164,6 +169,8 @@ get_job_candidates(skills=[...], include_evaluated=True)
 # 공고 동기화
 원티드 백엔드 공고 20페이지 동기화해줘
 리멤버에서 백엔드 3~5년차 공고 동기화해줘
+NHN 공고 동기화해줘
+네이버 공고 동기화해줘
 
 # 미지원 공고 조회
 내가 아직 지원 안 한 서울 정규직 공고 보여줘
@@ -188,19 +195,24 @@ crawling-recruit/
 ├── .env.example              # 환경변수 템플릿
 ├── main.py                   # MCP 서버 진입점 및 툴 등록
 ├── constants.py              # CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
-├── domain.py                 # 도메인 데이터클래스 (JobCandidate, JobDetail 등)
+├── domain.py                 # 도메인 데이터클래스 (JobDetail 등)
 ├── requirements.txt
 ├── db/
 │   ├── models.py             # SQLAlchemy 테이블 정의
 │   └── connection.py         # DB 엔진/세션/테이블 생성
 ├── services/
-│   ├── wanted_client.py      # Wanted API 클라이언트
-│   ├── remember_client.py    # Remember API 클라이언트
-│   └── job_service.py        # DB CRUD 및 추천 로직
-├── scripts/
-│   └── daily_sync.py         # 자동 크롤링 cron 러너
+│   ├── base_syncer.py        # 모든 Syncer의 기반 클래스
+│   ├── jobs/
+│   │   └── job_service.py    # DB CRUD, upsert, skill 매칭
+│   ├── wanted/               # Wanted API 클라이언트 + Syncer
+│   ├── remember/             # Remember API 클라이언트 + Syncer
+│   ├── nhn/                  # NHN 채용 클라이언트 + Syncer
+│   └── naver/                # 네이버 채용 클라이언트 + Syncer (HTML 파싱)
 ├── tools/
-│   ├── sync_jobs.py
+│   ├── wanted_sync_jobs.py
+│   ├── remember_sync_jobs.py
+│   ├── nhn_sync_jobs.py
+│   ├── naver_sync_jobs.py
 │   ├── sync_applications.py
 │   ├── sync_job_details.py
 │   ├── get_unapplied_jobs.py
@@ -210,22 +222,9 @@ crawling-recruit/
 │   ├── save_search_preset.py
 │   ├── list_search_presets.py
 │   └── migrate_db.py
-├── tests/
-│   ├── test_job_service.py
-│   ├── test_tools.py
-│   ├── test_db.py
-│   ├── test_daily_sync.py
-│   └── test_wanted_client.py
-├── spec/                     # 도메인별 요구사항 및 설계 문서
-│   ├── jobs/
-│   ├── applications/
-│   ├── job-details/
-│   ├── search-presets/
-│   ├── job-skip/
-│   └── job-evaluation/
-└── doc/                      # 외부 API 문서
-    ├── wanted.md
-    └── remember.md
+├── scripts/
+│   └── daily_sync.py         # 전체 소스 일괄 동기화 (cron용)
+└── tests/
 ```
 
 ---
@@ -234,7 +233,7 @@ crawling-recruit/
 
 | 테이블 | 설명 |
 |--------|------|
-| `jobs` | 수집된 채용공고 (Wanted + Remember) |
+| `jobs` | 수집된 채용공고 (Wanted·Remember·NHN·Naver) |
 | `job_details` | 공고 상세 (requirements, skill_tags 등) |
 | `applications` | 내 지원 이력 |
 | `job_skips` | 수동 제외 공고 |
@@ -246,5 +245,5 @@ crawling-recruit/
 ## 테스트
 
 ```bash
-pytest
+.venv/bin/python -m pytest
 ```
