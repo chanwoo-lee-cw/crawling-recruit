@@ -9,20 +9,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.naver.naver_constants import NAVER
 from services.nhn.nhn_constants import NHN
-from tools.nhn_sync_jobs import nhn_sync_jobs
 from services.remember.remember_constants import REMEMBER, RememberJobCategory
 from services.wanted.wanted_constants import WANTED, WantedJobSort
+from tools.naver_sync_jobs import naver_sync_jobs
+from tools.nhn_sync_jobs import nhn_sync_jobs
 from tools.remember_sync_jobs import remember_sync_jobs
-from tools.wanted_sync_jobs import wanted_sync_jobs
-
-from tools.sync_job_details import sync_job_details
 from tools.sync_applications import sync_applications
+from tools.sync_job_details import sync_job_details
+from tools.wanted_sync_jobs import wanted_sync_jobs
 
 SOURCES = [
     NHN,
     WANTED,
-    REMEMBER
+    REMEMBER,
+    NAVER,
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,6 +48,8 @@ async def run():
                 await remember_sync()
             elif source == NHN:
                 nhn_sync()
+            elif source == NAVER:
+                naver_sync()
             else:
                 raise RuntimeError(f"정의되지 않은 source[{source}] 입니다.")
             synced_count += 1
@@ -97,6 +101,14 @@ def nhn_sync():
         log(f"nhn_sync_jobs: {result}")
     except Exception as e:
         log(f"nhn_sync_jobs: 오류 - {e}")
+
+
+def naver_sync():
+    try:
+        result = naver_sync_jobs()
+        log(f"naver_sync_jobs: {result}")
+    except Exception as e:
+        log(f"naver_sync_jobs: 오류 - {e}")
 
 
 
