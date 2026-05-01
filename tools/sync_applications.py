@@ -1,5 +1,6 @@
 from db.connection import get_engine
 from services.jobs.job_service import JobService
+from services.naver.naver_constants import NAVER
 from services.nhn.nhn_application_syncer import NHNApplicationSyncer
 from services.nhn.nhn_constants import NHN
 from services.remember.remember_application_syncer import RememberApplicationSyncer
@@ -17,4 +18,6 @@ def sync_applications(source: str = WANTED) -> str:
         return RememberApplicationSyncer(service).sync()
     if source == NHN:
         return NHNApplicationSyncer(service).sync()
+    if source == NAVER:
+        return "네이버는 지원현황 API를 지원하지 않습니다."
     return WantedApplicationSyncer(service).sync()

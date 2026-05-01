@@ -1,5 +1,7 @@
 from db.connection import get_engine
 from services.jobs.job_service import JobService
+from services.naver.naver_constants import NAVER
+from services.naver.naver_detail_syncer import NaverDetailSyncer
 from services.nhn.nhn_constants import NHN
 from services.nhn.nhn_detail_syncer import NHNDetailSyncer
 from services.remember.remember_constants import REMEMBER
@@ -13,12 +15,14 @@ def sync_job_details(
     job_ids: list[int] | None = None,
     limit: int | None = None,
 ) -> str:
-    """공고 상세정보를 동기화한다. source: WANTED (기본), NHN. REMEMBER는 미지원."""
+    """공고 상세정보를 동기화한다. source: WANTED (기본), NHN, NAVER. REMEMBER는 미지원."""
     service = JobService(get_engine())
     if source == REMEMBER:
         return RememberDetailSyncer(service).sync()
     if source == NHN:
         return NHNDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
+    if source == NAVER:
+        return NaverDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
     return WantedDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
 
 
