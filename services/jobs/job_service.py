@@ -6,6 +6,7 @@ from db.models import SearchPreset
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
 from services.nhn.nhn_constants import NHN, NHN_JOB_BASE_URL
+from services.naver.naver_constants import NAVER, NAVER_JOB_BASE_URL
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -27,7 +28,15 @@ JOB_BASE_URLS = {
     WANTED: WANTED_JOB_BASE_URL,
     REMEMBER: REMEMBER_JOB_BASE_URL,
     NHN: NHN_JOB_BASE_URL,
+    NAVER: NAVER_JOB_BASE_URL,
 }
+
+
+def build_job_url(source: str, platform_id: int) -> str:
+    base_url = JOB_BASE_URLS.get(source, WANTED_JOB_BASE_URL)
+    if base_url.endswith("="):
+        return f"{base_url}{platform_id}"
+    return f"{base_url}/{platform_id}"
 
 
 class JobService:
@@ -304,8 +313,7 @@ class JobService:
             return "미지원 공고가 없습니다."
         lines = ["| internal_id | 회사명 | 포지션 | 지역 | 링크 |", "|---|---|---|---|---|"]
         for row in rows:
-            base_url = JOB_BASE_URLS.get(row["source"], WANTED_JOB_BASE_URL)
-            link = f"{base_url}/{row['platform_id']}"
+            link = build_job_url(row["source"], row["platform_id"])
             lines.append(
                 f"| {row['internal_id']} | {row['company_name']} | {row['title']} | {row['location']} | {link} |"
             )
