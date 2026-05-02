@@ -76,7 +76,8 @@ main.py                        # 3개 툴 등록
 ```
 GET https://www.coupang.jobs/kr/jobs/?search=&location=South+Korea&pagesize=500
 ```
-- 단일 요청으로 전체 수집 (`pagesize=500`으로 한국 공고 전량 커버)
+- 단일 요청으로 전체 수집 (`pagesize=500` 설정)
+- 수집 후 `len(jobs) >= 500`이면 경고 로그 출력 (향후 페이지네이션 추가 신호)
 - 파싱 대상: `div.card.card-job` 반복
   - job_id: `div.card-job-actions.js-job[data-id]`
   - title: `h2.card-title a.js-view-job` 텍스트
@@ -127,6 +128,7 @@ GET https://career.woowahan.com/w1/recruits?jobGroupCodes={codes}&recruitCampaig
 ```
 - 기본값: `jobGroupCodes=BA005001` (개발직군), 파라미터로 변경 가능
 - `data.totalPageNumber` 기준으로 전 페이지 순회
+- 각 항목에서 `recruitSeq`(int)와 `recruitNumber`(문자열, 예: `R2411018`)를 함께 수집
 
 **상세:** JSON API
 ```
@@ -136,6 +138,10 @@ GET https://career.woowahan.com/w1/recruits/{recruitNumber}
 - 섹션 추출: `<strong>` 태그 텍스트 패턴 감지
   - `"[지원자격]"` → `requirements`
   - `"[우대사항]"` → `preferred_points`
+
+**우아한형제들 상세 syncer의 `recruitNumber` 조회 방식:**  
+`platform_id = recruitSeq`(int)로 DB에 저장하지만, 상세 API는 `recruitNumber`(문자열)가 필요하다.  
+`WoowahanDetailSyncer.sync()`는 상세 수집 시작 전에 리스트 API를 전체 순회해 `{recruitSeq: recruitNumber}` 매핑 dict를 메모리에 구성한다. 이후 `get_jobs_without_details`가 반환하는 `(internal_id, platform_id)` 쌍에서 `platform_id`(=`recruitSeq`)로 매핑 dict를 조회해 `recruitNumber`를 얻고 상세 API를 호출한다.
 
 **지원현황:** 로그인 기반
 ```
@@ -164,6 +170,10 @@ Cookie: X-Authorization=<jwt>
 | `location` | `location` | 텍스트 (예: "대한민국") |
 | (고정) | `company_name` | `"Coupang"` |
 | (없음) | `employment_type`, `annual_from`, `annual_to` | NULL |
+| (없음) | `created_at` | NULL |
+| (고정) | `is_active` | `True` |
+| (현재시각) | `synced_at` | `datetime.now(timezone.utc)` |
+| (고정) | `updated_at` | `None` |
 
 #### `_parse_kakaobank_job(raw)`
 | 필드 | DB 컬럼 | 처리 |
@@ -174,25 +184,22 @@ Cookie: X-Authorization=<jwt>
 | `receiveStartDatetime` | `created_at` | datetime 파싱 |
 | (고정) | `company_name` | `"카카오뱅크"` |
 | (없음) | `location`, `annual_from`, `annual_to` | NULL |
+| (고정) | `is_active` | `True` |
+| (현재시각) | `synced_at` | `datetime.now(timezone.utc)` |
+| (고정) | `updated_at` | `None` |
 
 #### `_parse_woowahan_job(raw)`
 | 필드 | DB 컬럼 | 처리 |
 |------|---------|------|
 | `recruitSeq` | `platform_id` | int |
-| `recruitNumber` | (URL 구성용 별도 저장 불필요, platform_id로 대체) | — |
 | `recruitName` | `title` | 그대로 |
 | `employmentType.recruitItemCode` | `employment_type` | `BA002001` → `"regular"` 등 매핑 |
 | `recruitOpenDate` | `created_at` | datetime 파싱 |
 | (고정) | `company_name` | `"우아한형제들"` |
 | (없음) | `location`, `annual_from`, `annual_to` | NULL |
-
-> **우아한형제들 platform_id 주의**: 리스트 API의 `recruitSeq`(int)를 platform_id로 사용. 상세 조회는 `recruitNumber`(문자열, 예: `R2411018`)가 필요하므로, 상세 syncer에서 `recruitSeq` → `recruitNumber` 변환이 필요하다. 변환 방법: 리스트 API 응답에서 `recruitSeq`와 `recruitNumber`를 함께 저장하거나, 상세 syncer가 `platform_id`로 리스트 API를 재조회한다.
->
-> **단순화 결정**: `platform_id`에 `recruitSeq`를 저장하고, 상세 syncer는 상세 API를 `GET /w1/recruits?recruitSeq={id}` 검색으로 우회하거나, 리스트 응답에 `recruitNumber`를 `title` 등 기타 필드에 임시 저장하는 대신, `recruitSeq` 자체로 `/w1/recruits/{recruitNumber}` 호출이 불가하므로 **`recruitNumber`를 `platform_id`의 외부 ID로 사용**하기로 한다: `platform_id`는 `recruitSeq`(int), 상세 URL 구성은 `recruit_number` 컬럼(별도) 또는 `title` 로 우회하지 않고, **리스트 syncer에서 `recruitNumber`를 임시 dict key로 저장 후 job_service가 URL 컬럼에 full URL을 저장**하는 방식으로 해결. 구체적으로 `_parse_woowahan_job`에서 `platform_id = raw["recruitSeq"]`로 저장하고, `recruit_number = raw["recruitNumber"]`를 별도 key로 넘겨 DB URL을 미리 계산해서 저장한다.
->
-> **최종 결정**: `platform_id = recruitSeq` (int), 상세 API 호출은 `recruit_number`(문자열)이 필요하므로 상세 syncer는 `jobs` 테이블에서 `source=woowahan`인 공고 조회 시 `platform_id`와 함께 `recruit_number` 컬럼을 추가하거나, jobs 테이블의 기존 스키마를 유지하기 위해 `platform_id`에 `recruitNumber`의 숫자 부분(예: `R2411018` → `2411018`)을 저장한다. 
->
-> **가장 단순한 결론**: `recruitNumber` 형식이 `R{YYYYMM}{seq}` 형태라 int 변환이 불가능하므로, woowahan 상세 API URL은 `platform_id`(=`recruitSeq`) 대신 `recruit_number`를 직접 사용해야 한다. **DB `jobs` 테이블에 `recruit_number` 컬럼 추가 없이**, syncer에서 별도 매핑 dict를 관리하거나, `WoowahanDetailSyncer`가 `platform_id`로 리스트 API를 재조회하는 방법으로 우회한다. **최종 구현 결정**: `get_jobs_without_details`가 반환하는 `(internal_id, platform_id)` 쌍에서 `platform_id`는 `recruitSeq`이므로, 상세 조회 전에 `GET /w1/recruits?recruitSeq={id}`로 `recruitNumber`를 얻어 상세 API를 호출한다.
+| (고정) | `is_active` | `True` |
+| (현재시각) | `synced_at` | `datetime.now(timezone.utc)` |
+| (고정) | `updated_at` | `None` |
 
 ### `JOB_BASE_URLS` 추가
 
@@ -204,14 +211,16 @@ WOOWAHAN = "woowahan"
 JOB_BASE_URLS = {
     ...
     COUPANG: "https://www.coupang.jobs/kr/jobs",
+    KAKAO_BANK: "https://kakaobank.recruiter.co.kr/app/jobnotice/view?systemKindCode=MRS2&jobnoticeSn=",
     WOOWAHAN: "https://career.woowahan.com/recruit",
 }
 ```
 
-카카오뱅크는 URL 형식이 달라 `build_job_url`에서 분기 처리:
+카카오뱅크 URL은 `base_url.endswith("=")` 조건을 활용해 기존 `build_job_url` 분기 없이 처리된다:
 ```python
-if source == KAKAO_BANK:
-    return f"https://kakaobank.recruiter.co.kr/app/jobnotice/view?systemKindCode=MRS2&jobnoticeSn={platform_id}"
+# 기존 build_job_url 로직 그대로 적용됨
+if base_url.endswith("="):
+    return f"{base_url}{platform_id}"  # → ?jobnoticeSn=251760
 ```
 
 ---
@@ -222,6 +231,7 @@ if source == KAKAO_BANK:
 [쿠팡]
 Step 1: coupang_sync_jobs
   - pagesize=500 단일 요청, full_sync=True
+  - len(jobs) >= 500이면 경고 로그
 Step 2: sync_job_details(source="coupang")
   - fetched_at IS NULL 공고 순회
   - CRAWL_DELAY_SECONDS 대기
@@ -241,8 +251,10 @@ Step 1: woowahan_sync_jobs
   - jobGroupCodes=BA005001 기본값, page=0 부터 totalPageNumber 미만 순회
   - full_sync=True
 Step 2: sync_job_details(source="woowahan")
+  - 리스트 API 전체 순회 → {recruitSeq: recruitNumber} 매핑 구성
   - fetched_at IS NULL 공고 순회
-  - platform_id(recruitSeq)로 리스트 API 재조회 → recruitNumber 획득 → 상세 API 호출
+  - platform_id(recruitSeq) → 매핑 dict → recruitNumber → 상세 API 호출
+  - CRAWL_DELAY_SECONDS 대기
 Step 3: sync_applications(source="woowahan")
   - WOOWAHAN_EMAIL/PASSWORD로 로그인 → X-Authorization 쿠키 획득
   - GET /w1/applications 전 페이지 순회
@@ -260,6 +272,7 @@ Step 3: sync_applications(source="woowahan")
 | 우아한형제들 로그인 실패 | 한국어 에러 문자열 반환 |
 | 우아한형제들 비밀번호 만료 경고 (`code=2101`) | 쿠키 발급되면 계속 진행 |
 | `.env` 환경변수 누락 (woowahan) | `ValueError` raise → 한국어 에러 반환 |
+| 우아한형제들 recruitSeq가 매핑 dict에 없음 | 경고 로그 출력 후 skip (해당 공고는 다음 list sync에서 `is_active=False`로 전환되므로 `get_unapplied_jobs`/`get_job_candidates` 노출 없음) |
 
 ---
 
@@ -277,12 +290,30 @@ WOOWAHAN_PASSWORD=...
 - 모든 네트워크 호출은 `unittest.mock.patch` 또는 고정 fixture로 mock 처리
 - 쿠팡: 실제 HTML 샘플(doc 기반)로 `_parse_coupang_detail` unit test
 - 카카오뱅크: 실제 JSON + HTML contents 샘플로 `_parse_kakaobank_detail` unit test
-- 우아한형제들: 로그인 → 쿠키 → 지원현황 조회 흐름을 mock으로 검증
+- 우아한형제들 detail syncer:
+  - 리스트 API mock → `{recruitSeq: recruitNumber}` 매핑 구성 검증
+  - 매핑 성공 시 상세 API URL에 `recruitNumber` 사용 확인
+  - 매핑 실패(recruitSeq 없음) 시 해당 공고 skip 확인
+- 우아한형제들 application syncer: 로그인 → 쿠키 → 지원현황 조회 흐름 mock 검증
 - `daily_sync.py` 통합: 3개 소스가 모두 호출되는지 확인
 
 ---
 
-## 8. `daily_sync.py` 통합
+## 8. 통합 등록
+
+### `main.py` 툴 등록
+
+```python
+from tools.coupang_sync_jobs import coupang_sync_jobs
+from tools.kakaobank_sync_jobs import kakaobank_sync_jobs
+from tools.woowahan_sync_jobs import woowahan_sync_jobs
+
+mcp.tool()(coupang_sync_jobs)
+mcp.tool()(kakaobank_sync_jobs)
+mcp.tool()(woowahan_sync_jobs)
+```
+
+### `daily_sync.py` 통합
 
 기존 소스 목록에 3개 추가:
 
