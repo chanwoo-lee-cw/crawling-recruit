@@ -9,22 +9,31 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.coupang.coupang_constants import COUPANG
+from services.kakaobank.kakaobank_constants import KAKAO_BANK
 from services.naver.naver_constants import NAVER
 from services.nhn.nhn_constants import NHN
 from services.remember.remember_constants import REMEMBER, RememberJobCategory
 from services.wanted.wanted_constants import WANTED, WantedJobSort
+from services.woowahan.woowahan_constants import WOOWAHAN
+from tools.coupang_sync_jobs import coupang_sync_jobs
+from tools.kakaobank_sync_jobs import kakaobank_sync_jobs
 from tools.naver_sync_jobs import naver_sync_jobs
 from tools.nhn_sync_jobs import nhn_sync_jobs
 from tools.remember_sync_jobs import remember_sync_jobs
 from tools.sync_applications import sync_applications
 from tools.sync_job_details import sync_job_details
 from tools.wanted_sync_jobs import wanted_sync_jobs
+from tools.woowahan_sync_jobs import woowahan_sync_jobs
 
 SOURCES = [
     NHN,
     WANTED,
     REMEMBER,
     NAVER,
+    COUPANG,
+    KAKAO_BANK,
+    WOOWAHAN,
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -50,6 +59,12 @@ async def run():
                 nhn_sync()
             elif source == NAVER:
                 naver_sync()
+            elif source == COUPANG:
+                coupang_sync()
+            elif source == KAKAO_BANK:
+                kakaobank_sync()
+            elif source == WOOWAHAN:
+                woowahan_sync()
             else:
                 raise RuntimeError(f"정의되지 않은 source[{source}] 입니다.")
             synced_count += 1
@@ -110,6 +125,29 @@ def naver_sync():
     except Exception as e:
         log(f"naver_sync_jobs: 오류 - {e}")
 
+
+def coupang_sync():
+    try:
+        result = coupang_sync_jobs()
+        log(f"coupang_sync_jobs: {result}")
+    except Exception as e:
+        log(f"coupang_sync_jobs: 오류 - {e}")
+
+
+def kakaobank_sync():
+    try:
+        result = kakaobank_sync_jobs()
+        log(f"kakaobank_sync_jobs: {result}")
+    except Exception as e:
+        log(f"kakaobank_sync_jobs: 오류 - {e}")
+
+
+def woowahan_sync():
+    try:
+        result = woowahan_sync_jobs()
+        log(f"woowahan_sync_jobs: {result}")
+    except Exception as e:
+        log(f"woowahan_sync_jobs: 오류 - {e}")
 
 
 if __name__ == "__main__":

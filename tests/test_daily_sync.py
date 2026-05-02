@@ -1,8 +1,28 @@
 from unittest.mock import patch, AsyncMock
 
+from services.coupang.coupang_constants import COUPANG
+from services.kakaobank.kakaobank_constants import KAKAO_BANK
 from services.nhn.nhn_constants import NHN
 from services.remember.remember_constants import REMEMBER
 from services.wanted.wanted_constants import WANTED, WantedJobSort
+from services.woowahan.woowahan_constants import WOOWAHAN
+
+
+def _all_sync_patches(extra=None):
+    patches = {
+        "scripts.daily_sync.wanted_sync_jobs": "완료",
+        "scripts.daily_sync.remember_sync_jobs": "완료",
+        "scripts.daily_sync.nhn_sync_jobs": "완료",
+        "scripts.daily_sync.naver_sync_jobs": "완료",
+        "scripts.daily_sync.coupang_sync_jobs": "완료",
+        "scripts.daily_sync.kakaobank_sync_jobs": "완료",
+        "scripts.daily_sync.woowahan_sync_jobs": "완료",
+        "scripts.daily_sync.sync_job_details": "완료",
+        "scripts.daily_sync.sync_applications": "완료",
+    }
+    if extra:
+        patches.update(extra)
+    return patches
 
 
 async def test_run_calls_wanted_sync_jobs_for_each_sort():
@@ -10,6 +30,10 @@ async def test_run_calls_wanted_sync_jobs_for_each_sort():
     with patch("scripts.daily_sync.wanted_sync_jobs", new_callable=AsyncMock) as mock_wanted, \
          patch("scripts.daily_sync.remember_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.nhn_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.naver_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.coupang_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.kakaobank_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.woowahan_sync_jobs", return_value="완료"), \
          patch("scripts.daily_sync.sync_job_details", return_value="완료"), \
          patch("scripts.daily_sync.sync_applications", new_callable=AsyncMock, return_value="완료"):
 
@@ -24,10 +48,14 @@ async def test_run_calls_wanted_sync_jobs_for_each_sort():
 
 
 async def test_run_calls_sync_job_details_for_each_source():
-    """sync_job_details는 각 source(NHN, WANTED, REMEMBER)별로 호출된다"""
+    """sync_job_details는 각 source별로 호출된다"""
     with patch("scripts.daily_sync.wanted_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.remember_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.nhn_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.naver_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.coupang_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.kakaobank_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.woowahan_sync_jobs", return_value="완료"), \
          patch("scripts.daily_sync.sync_job_details") as mock_details, \
          patch("scripts.daily_sync.sync_applications", new_callable=AsyncMock, return_value="완료"):
 
@@ -38,13 +66,20 @@ async def test_run_calls_sync_job_details_for_each_source():
     assert NHN in sources
     assert WANTED in sources
     assert REMEMBER in sources
+    assert COUPANG in sources
+    assert KAKAO_BANK in sources
+    assert WOOWAHAN in sources
 
 
 async def test_run_calls_sync_applications_for_each_source():
-    """sync_applications는 NHN, WANTED, REMEMBER 각각 호출된다"""
+    """sync_applications는 각 source별로 호출된다"""
     with patch("scripts.daily_sync.wanted_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.remember_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.nhn_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.naver_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.coupang_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.kakaobank_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.woowahan_sync_jobs", return_value="완료"), \
          patch("scripts.daily_sync.sync_job_details", return_value="완료"), \
          patch("scripts.daily_sync.sync_applications", new_callable=AsyncMock) as mock_apps:
 
@@ -57,6 +92,9 @@ async def test_run_calls_sync_applications_for_each_source():
     assert NHN in sources
     assert WANTED in sources
     assert REMEMBER in sources
+    assert COUPANG in sources
+    assert KAKAO_BANK in sources
+    assert WOOWAHAN in sources
 
 
 async def test_run_continues_after_wanted_sync_jobs_failure():
@@ -69,6 +107,10 @@ async def test_run_continues_after_wanted_sync_jobs_failure():
     with patch("scripts.daily_sync.wanted_sync_jobs", side_effect=wanted_side_effect), \
          patch("scripts.daily_sync.remember_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.nhn_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.naver_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.coupang_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.kakaobank_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.woowahan_sync_jobs", return_value="완료"), \
          patch("scripts.daily_sync.sync_job_details") as mock_details, \
          patch("scripts.daily_sync.sync_applications", new_callable=AsyncMock, return_value="완료"):
 
@@ -83,6 +125,10 @@ async def test_run_continues_after_sync_job_details_failure():
     with patch("scripts.daily_sync.wanted_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.remember_sync_jobs", new_callable=AsyncMock, return_value="완료"), \
          patch("scripts.daily_sync.nhn_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.naver_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.coupang_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.kakaobank_sync_jobs", return_value="완료"), \
+         patch("scripts.daily_sync.woowahan_sync_jobs", return_value="완료"), \
          patch("scripts.daily_sync.sync_job_details", side_effect=Exception("상세 오류")), \
          patch("scripts.daily_sync.sync_applications", new_callable=AsyncMock) as mock_apps:
 
