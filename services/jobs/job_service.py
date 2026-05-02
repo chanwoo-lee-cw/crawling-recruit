@@ -7,6 +7,7 @@ from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
 from services.nhn.nhn_constants import NHN, NHN_JOB_BASE_URL
 from services.naver.naver_constants import NAVER, NAVER_JOB_BASE_URL
+from services.coupang.coupang_constants import COUPANG, COUPANG_JOB_BASE_URL
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -30,6 +31,7 @@ JOB_BASE_URLS = {
     REMEMBER: REMEMBER_JOB_BASE_URL,
     NHN: NHN_JOB_BASE_URL,
     NAVER: NAVER_JOB_BASE_URL,
+    COUPANG: COUPANG_JOB_BASE_URL,
 }
 
 
@@ -129,6 +131,26 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_coupang_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        return {
+            "source": COUPANG,
+            "platform_id": int(raw["id"]),
+            "company_id": None,
+            "company_name": "Coupang",
+            "title": raw["title"],
+            "location": raw.get("location"),
+            "employment_type": None,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
     def _parse_naver_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         emp_type_raw = raw.get("empTypeCdNm")
@@ -174,6 +196,8 @@ class JobService:
             return self._parse_nhn_job(raw)
         if source == NAVER:
             return self._parse_naver_job(raw)
+        if source == COUPANG:
+            return self._parse_coupang_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
