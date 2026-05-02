@@ -9,6 +9,7 @@ from services.nhn.nhn_constants import NHN, NHN_JOB_BASE_URL
 from services.naver.naver_constants import NAVER, NAVER_JOB_BASE_URL
 from services.coupang.coupang_constants import COUPANG, COUPANG_JOB_BASE_URL
 from services.kakaobank.kakaobank_constants import KAKAO_BANK, KAKAOBANK_JOB_URL
+from services.woowahan.woowahan_constants import WOOWAHAN, WOOWAHAN_JOB_BASE_URL
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -34,6 +35,7 @@ JOB_BASE_URLS = {
     NAVER: NAVER_JOB_BASE_URL,
     COUPANG: COUPANG_JOB_BASE_URL,
     KAKAO_BANK: KAKAOBANK_JOB_URL,
+    WOOWAHAN: WOOWAHAN_JOB_BASE_URL,
 }
 
 
@@ -130,6 +132,37 @@ class JobService:
             "category_tag_id": None,
             "is_active": True,
             "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
+    def _parse_woowahan_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        recruit_number = raw.get("recruitNumber", "")
+        platform_id = int(recruit_number[1:]) if recruit_number.startswith("R") else int(raw["recruitSeq"])
+        emp_code = (raw.get("employmentType") or {}).get("recruitItemCode", "")
+        employment_type = "regular" if emp_code == "BA002001" else None
+        created_at = None
+        open_date = raw.get("recruitOpenDate")
+        if open_date:
+            try:
+                created_at = datetime.fromisoformat(open_date)
+            except ValueError:
+                pass
+        return {
+            "source": WOOWAHAN,
+            "platform_id": platform_id,
+            "company_id": None,
+            "company_name": "우아한형제들",
+            "title": raw["recruitName"],
+            "location": None,
+            "employment_type": employment_type,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": created_at,
             "synced_at": now,
             "updated_at": None,
         }
@@ -232,6 +265,8 @@ class JobService:
             return self._parse_coupang_job(raw)
         if source == KAKAO_BANK:
             return self._parse_kakaobank_job(raw)
+        if source == WOOWAHAN:
+            return self._parse_woowahan_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:

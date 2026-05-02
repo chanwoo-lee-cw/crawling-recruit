@@ -1,0 +1,7 @@
+WOOWAHAN = "woowahan"
+WOOWAHAN_LIST_URL = "https://career.woowahan.com/w1/recruits"
+WOOWAHAN_DETAIL_URL = "https://career.woowahan.com/w1/recruits"
+WOOWAHAN_LOGIN_URL = "https://career.woowahan.com/login"
+WOOWAHAN_APPLICATIONS_URL = "https://career.woowahan.com/w1/applications"
+WOOWAHAN_JOB_BASE_URL = "https://career.woowahan.com/recruit"
+WOOWAHAN_DEFAULT_JOB_GROUP = "BA005001"
