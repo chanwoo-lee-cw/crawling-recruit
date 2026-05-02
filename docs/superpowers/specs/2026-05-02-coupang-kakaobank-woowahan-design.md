@@ -128,20 +128,17 @@ GET https://career.woowahan.com/w1/recruits?jobGroupCodes={codes}&recruitCampaig
 ```
 - 기본값: `jobGroupCodes=BA005001` (개발직군), 파라미터로 변경 가능
 - `data.totalPageNumber` 기준으로 전 페이지 순회
-- 각 항목에서 `recruitSeq`(int)와 `recruitNumber`(문자열, 예: `R2411018`)를 함께 수집
+- `platform_id = int(recruit_number[1:])`: `recruitNumber`(예: `"R2411018"`)에서 `"R"` 제거 후 int 변환 → `2411018`
 
 **상세:** JSON API
 ```
 GET https://career.woowahan.com/w1/recruits/{recruitNumber}
 ```
+- `platform_id`(int, 예: `2411018`) → `recruitNumber` 복원: `f"R{platform_id}"` → `"R2411018"`
 - `data.recruitContents` 필드(HTML 문자열) 파싱
 - 섹션 추출: `<strong>` 태그 텍스트 패턴 감지
   - `"[지원자격]"` → `requirements`
   - `"[우대사항]"` → `preferred_points`
-
-**우아한형제들 상세 syncer의 `recruitNumber` 조회 방식:**  
-`platform_id = recruitSeq`(int)로 DB에 저장하지만, 상세 API는 `recruitNumber`(문자열)가 필요하다.  
-`WoowahanDetailSyncer.sync()`는 상세 수집 시작 전에 리스트 API를 전체 순회해 `{recruitSeq: recruitNumber}` 매핑 dict를 메모리에 구성한다. 이후 `get_jobs_without_details`가 반환하는 `(internal_id, platform_id)` 쌍에서 `platform_id`(=`recruitSeq`)로 매핑 dict를 조회해 `recruitNumber`를 얻고 상세 API를 호출한다.
 
 **지원현황:** 로그인 기반
 ```
@@ -191,7 +188,7 @@ Cookie: X-Authorization=<jwt>
 #### `_parse_woowahan_job(raw)`
 | 필드 | DB 컬럼 | 처리 |
 |------|---------|------|
-| `recruitSeq` | `platform_id` | int |
+| `recruitNumber` | `platform_id` | `int(recruit_number[1:])` — `"R2411018"` → `2411018` |
 | `recruitName` | `title` | 그대로 |
 | `employmentType.recruitItemCode` | `employment_type` | `BA002001` → `"regular"` 등 매핑 |
 | `recruitOpenDate` | `created_at` | datetime 파싱 |
@@ -251,9 +248,8 @@ Step 1: woowahan_sync_jobs
   - jobGroupCodes=BA005001 기본값, page=0 부터 totalPageNumber 미만 순회
   - full_sync=True
 Step 2: sync_job_details(source="woowahan")
-  - 리스트 API 전체 순회 → {recruitSeq: recruitNumber} 매핑 구성
   - fetched_at IS NULL 공고 순회
-  - platform_id(recruitSeq) → 매핑 dict → recruitNumber → 상세 API 호출
+  - platform_id(int) → f"R{platform_id}" → recruitNumber → 상세 API 호출
   - CRAWL_DELAY_SECONDS 대기
 Step 3: sync_applications(source="woowahan")
   - WOOWAHAN_EMAIL/PASSWORD로 로그인 → X-Authorization 쿠키 획득
@@ -272,7 +268,6 @@ Step 3: sync_applications(source="woowahan")
 | 우아한형제들 로그인 실패 | 한국어 에러 문자열 반환 |
 | 우아한형제들 비밀번호 만료 경고 (`code=2101`) | 쿠키 발급되면 계속 진행 |
 | `.env` 환경변수 누락 (woowahan) | `ValueError` raise → 한국어 에러 반환 |
-| 우아한형제들 recruitSeq가 매핑 dict에 없음 | 경고 로그 출력 후 skip (해당 공고는 다음 list sync에서 `is_active=False`로 전환되므로 `get_unapplied_jobs`/`get_job_candidates` 노출 없음) |
 
 ---
 
@@ -291,9 +286,7 @@ WOOWAHAN_PASSWORD=...
 - 쿠팡: 실제 HTML 샘플(doc 기반)로 `_parse_coupang_detail` unit test
 - 카카오뱅크: 실제 JSON + HTML contents 샘플로 `_parse_kakaobank_detail` unit test
 - 우아한형제들 detail syncer:
-  - 리스트 API mock → `{recruitSeq: recruitNumber}` 매핑 구성 검증
-  - 매핑 성공 시 상세 API URL에 `recruitNumber` 사용 확인
-  - 매핑 실패(recruitSeq 없음) 시 해당 공고 skip 확인
+  - `platform_id = 2411018` → `f"R{platform_id}"` → `"R2411018"` 상세 API 호출 확인
 - 우아한형제들 application syncer: 로그인 → 쿠키 → 지원현황 조회 흐름 mock 검증
 - `daily_sync.py` 통합: 3개 소스가 모두 호출되는지 확인
 
