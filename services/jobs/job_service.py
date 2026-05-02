@@ -8,6 +8,7 @@ from services.remember.remember_constants import REMEMBER
 from services.nhn.nhn_constants import NHN, NHN_JOB_BASE_URL
 from services.naver.naver_constants import NAVER, NAVER_JOB_BASE_URL
 from services.coupang.coupang_constants import COUPANG, COUPANG_JOB_BASE_URL
+from services.kakaobank.kakaobank_constants import KAKAO_BANK, KAKAOBANK_JOB_URL
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -32,6 +33,7 @@ JOB_BASE_URLS = {
     NHN: NHN_JOB_BASE_URL,
     NAVER: NAVER_JOB_BASE_URL,
     COUPANG: COUPANG_JOB_BASE_URL,
+    KAKAO_BANK: KAKAOBANK_JOB_URL,
 }
 
 
@@ -46,6 +48,7 @@ class JobService:
     EMPLOYMENT_TYPE_MAP = {
         "정규직": "regular",
         "정규": "regular",
+        "일반채용": "regular",
         "인턴": "intern",
         "계약직": "contract",
         "계약": "contract",
@@ -131,6 +134,35 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_kakaobank_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        emp_type_raw = raw.get("recruitTypeName")
+        employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_type_raw) if emp_type_raw else None
+        created_at = None
+        start_str = raw.get("receiveStartDatetime")
+        if start_str:
+            try:
+                created_at = datetime.fromisoformat(start_str)
+            except ValueError:
+                pass
+        return {
+            "source": KAKAO_BANK,
+            "platform_id": int(raw["recruitNoticeSn"]),
+            "company_id": None,
+            "company_name": "카카오뱅크",
+            "title": raw["recruitNoticeName"],
+            "location": None,
+            "employment_type": employment_type,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": created_at,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
     def _parse_coupang_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         return {
@@ -198,6 +230,8 @@ class JobService:
             return self._parse_naver_job(raw)
         if source == COUPANG:
             return self._parse_coupang_job(raw)
+        if source == KAKAO_BANK:
+            return self._parse_kakaobank_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
