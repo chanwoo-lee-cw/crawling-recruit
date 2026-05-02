@@ -294,11 +294,30 @@ class JobService:
             })
         return result
 
+    def _parse_woowahan_applications(self, raw_apps: list[dict]) -> list[dict]:
+        result = []
+        for app in raw_apps:
+            if not app.get("applicationFinalYn"):
+                continue
+            recruit_number = app.get("recruitNumber", "")
+            job_platform_id = int(recruit_number[1:]) if recruit_number.startswith("R") else None
+            if job_platform_id is None:
+                continue
+            result.append({
+                "job_platform_id": job_platform_id,
+                "platform_id": app["applicationSeq"],
+                "status": app["applicationJudgmentStatesCode"]["code"],
+                "apply_time_str": app.get("applicationDate"),
+            })
+        return result
+
     def _parse_applications(self, raw_apps: list[dict], source: str) -> list[dict]:
         if source == REMEMBER:
             return self._parse_remember_applications(raw_apps)
         if source == NHN:
             return self._parse_nhn_applications(raw_apps)
+        if source == WOOWAHAN:
+            return self._parse_woowahan_applications(raw_apps)
         return self._parse_wanted_applications(raw_apps)
 
     @transactional()
