@@ -4,7 +4,7 @@ from services.wanted.wanted_constants import WANTED
 
 
 class WantedSyncer(BaseSyncer):
-    def sync(
+    async def sync(
         self,
         job_group_id: int = 518,
         job_ids: list[int] | None = None,
@@ -15,7 +15,7 @@ class WantedSyncer(BaseSyncer):
     ) -> str:
         client = WantedClient()
         full_sync = limit_pages is None
-        jobs = client.fetch_jobs(
+        jobs = await client.fetch_jobs(
             job_group_id=job_group_id,
             job_ids=job_ids,
             years=years,
