@@ -482,3 +482,106 @@ def test_get_unapplied_job_rows_excludes_evaluated_in_sql():
         service.get_unapplied_job_rows(include_evaluated=False)
     assert len(captured) == 1
     assert "job_evaluations" in str(captured[0])
+
+
+def test_add_keyword():
+    mock_session = MagicMock()
+    mock_session.scalars.return_value.first.return_value = None  # 미존재
+    service = JobService(engine=MagicMock())
+    with test_session_context(mock_session):
+        result = service.add_keyword("Python")
+    assert result == "키워드가 추가되었습니다: Python"
+    mock_session.add.assert_called_once()
+
+
+def test_add_keyword_duplicate():
+    mock_session = MagicMock()
+    mock_session.scalars.return_value.first.return_value = MagicMock()  # 이미 존재
+    service = JobService(engine=MagicMock())
+    with test_session_context(mock_session):
+        result = service.add_keyword("Python")
+    assert result == "이미 존재하는 키워드입니다: Python"
+
+
+def test_list_keywords():
+    mock_session = MagicMock()
+    mock_session.scalars.return_value.all.return_value = ["AWS", "Python"]
+    service = JobService(engine=MagicMock())
+    with test_session_context(mock_session):
+        result = service.list_keywords()
+    assert result == ["AWS", "Python"]
+
+
+def test_delete_keyword():
+    mock_kw = MagicMock()
+    mock_session = MagicMock()
+    mock_session.scalars.return_value.first.return_value = mock_kw
+    service = JobService(engine=MagicMock())
+    with test_session_context(mock_session):
+        result = service.delete_keyword("Python")
+    assert result == "키워드가 삭제되었습니다: Python"
+    mock_session.delete.assert_called_once_with(mock_kw)
+
+
+def test_delete_keyword_not_found():
+    mock_session = MagicMock()
+    mock_session.scalars.return_value.first.return_value = None
+    service = JobService(engine=MagicMock())
+    with test_session_context(mock_session):
+        result = service.delete_keyword("Go")
+    assert result == "존재하지 않는 키워드입니다: Go"
+
+
+def test_enrich_skill_tags_adds_matched_keywords():
+    service = JobService(engine=MagicMock())
+    detail = JobDetail(
+        job_id=1,
+        requirements="Python 3년 이상. MySQL 경험 필수.",
+        preferred_points="Docker 경험자 우대",
+        skill_tags=[{"text": "Python"}],
+    )
+    result = service.enrich_skill_tags(detail, ["Python", "MySQL", "Docker", "AWS"])
+    texts = [t["text"] for t in result.skill_tags]
+    assert "Python" in texts
+    assert "MySQL" in texts
+    assert "Docker" in texts
+    assert "AWS" not in texts
+
+
+def test_enrich_skill_tags_empty_keywords():
+    service = JobService(engine=MagicMock())
+    detail = JobDetail(
+        job_id=1,
+        requirements="Python 3년 이상",
+        preferred_points=None,
+        skill_tags=[{"text": "Python"}],
+    )
+    result = service.enrich_skill_tags(detail, [])
+    assert result.skill_tags == [{"text": "Python"}]
+
+
+def test_enrich_skill_tags_no_duplicate():
+    service = JobService(engine=MagicMock())
+    detail = JobDetail(
+        job_id=1,
+        requirements="python 경험 필수",
+        preferred_points=None,
+        skill_tags=[{"text": "Python"}],
+    )
+    result = service.enrich_skill_tags(detail, ["Python"])
+    python_count = sum(1 for t in result.skill_tags if t["text"].lower() == "python")
+    assert python_count == 1
+
+
+def test_enrich_skill_tags_word_boundary():
+    service = JobService(engine=MagicMock())
+    detail = JobDetail(
+        job_id=1,
+        requirements="Python3 경험, Java 개발자",
+        preferred_points=None,
+        skill_tags=[],
+    )
+    result = service.enrich_skill_tags(detail, ["Python", "Java"])
+    texts = [t["text"] for t in result.skill_tags]
+    assert "Python" not in texts
+    assert "Java" in texts

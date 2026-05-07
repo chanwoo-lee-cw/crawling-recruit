@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 SAMPLE_JOB = {
@@ -25,19 +25,30 @@ SAMPLE_APPLICATION_JOB = {
 }
 
 
-def test_fetch_jobs_success():
-    with patch("services.remember.remember_client.httpx") as mock_httpx:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
+def _make_http_mock(status_code=200, json_data=None):
+    mock_http = AsyncMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    mock_resp.raise_for_status = MagicMock()
+    if json_data is not None:
+        mock_resp.json.return_value = json_data
+    mock_http.post.return_value = mock_resp
+    mock_http.get.return_value = mock_resp
+    return mock_http, mock_resp
+
+
+async def test_fetch_jobs_success():
+    with patch("services.remember.remember_client.httpx.AsyncClient") as mock_cls, \
+         patch.dict("os.environ", {"REMEMBER_AUTH_TOKEN": "test_token"}):
+        mock_http, _ = _make_http_mock(200, {
             "data": [SAMPLE_JOB],
             "meta": {"total_pages": 1, "page": 1},
-        }
-        mock_httpx.post.return_value = mock_resp
+        })
+        mock_cls.return_value = mock_http
 
         from services.remember.remember_client import RememberClient
         client = RememberClient()
-        jobs = client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
+        jobs = await client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
 
     assert len(jobs) == 1
     assert jobs[0]["id"] == 308098
@@ -45,20 +56,18 @@ def test_fetch_jobs_success():
     assert jobs[0]["organization"]["name"] == "(주)이스트소프트"
 
 
-def test_fetch_applications_success():
-    with patch("services.remember.remember_client.httpx") as mock_httpx, \
-         patch.dict("os.environ", {"REMEMBER_COOKIE": "test_cookie"}):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
+async def test_fetch_applications_success():
+    with patch("services.remember.remember_client.httpx.AsyncClient") as mock_cls, \
+         patch.dict("os.environ", {"REMEMBER_COOKIE": "test_cookie", "REMEMBER_AUTH_TOKEN": "test_token"}):
+        mock_http, _ = _make_http_mock(200, {
             "data": [SAMPLE_APPLICATION_JOB],
             "meta": {"total_pages": 1, "page": 1},
-        }
-        mock_httpx.get.return_value = mock_resp
+        })
+        mock_cls.return_value = mock_http
 
         from services.remember.remember_client import RememberClient
         client = RememberClient()
-        apps = client.fetch_applications()
+        apps = await client.fetch_applications()
 
     assert len(apps) == 1
     assert apps[0]["id"] == 303872
@@ -66,34 +75,36 @@ def test_fetch_applications_success():
     assert apps[0]["application"]["status"] == "applied"
 
 
-def test_fetch_applications_raises_on_missing_cookie():
+async def test_fetch_applications_raises_on_missing_cookie():
     with patch.dict("os.environ", {}, clear=True):
         from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(ValueError, match="REMEMBER_COOKIE"):
-            client.fetch_applications()
+            await client.fetch_applications()
 
 
-def test_fetch_applications_raises_on_expired_cookie():
-    with patch("services.remember.remember_client.httpx") as mock_httpx, \
-         patch.dict("os.environ", {"REMEMBER_COOKIE": "expired"}):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 401
-        mock_httpx.get.return_value = mock_resp
+async def test_fetch_applications_raises_on_expired_cookie():
+    with patch("services.remember.remember_client.httpx.AsyncClient") as mock_cls, \
+         patch.dict("os.environ", {"REMEMBER_COOKIE": "expired", "REMEMBER_AUTH_TOKEN": "tok"}):
+        mock_http, _ = _make_http_mock(401)
+        mock_cls.return_value = mock_http
 
         from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(PermissionError, match="만료"):
-            client.fetch_applications()
+            await client.fetch_applications()
 
 
-def test_fetch_jobs_http_error():
-    with patch("services.remember.remember_client.httpx") as mock_httpx:
+async def test_fetch_jobs_http_error():
+    with patch("services.remember.remember_client.httpx.AsyncClient") as mock_cls, \
+         patch.dict("os.environ", {"REMEMBER_AUTH_TOKEN": "test_token"}):
+        mock_http = AsyncMock()
+        mock_cls.return_value = mock_http
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = Exception("500 Server Error")
-        mock_httpx.post.return_value = mock_resp
+        mock_http.post.return_value = mock_resp
 
         from services.remember.remember_client import RememberClient
         client = RememberClient()
         with pytest.raises(Exception, match="500"):
-            client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
+            await client.fetch_jobs(job_category_names=[{"level1": "SW개발", "level2": "백엔드"}])
