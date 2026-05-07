@@ -4,7 +4,7 @@ from services.base_syncer import BaseSyncer
 
 
 class RememberSyncer(BaseSyncer):
-    def sync(
+    async def sync(
         self,
         job_category_names: list[dict] | None = None,
         min_experience: int = 0,
@@ -14,7 +14,7 @@ class RememberSyncer(BaseSyncer):
         if not job_category_names:
             return "Remember 동기화에는 job_category_names가 필요합니다."
         client = RememberClient()
-        jobs = client.fetch_jobs(
+        jobs = await client.fetch_jobs(
             job_category_names=job_category_names,
             min_experience=min_experience,
             max_experience=max_experience,

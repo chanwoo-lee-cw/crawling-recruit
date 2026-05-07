@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from services.wanted.wanted_client import WantedClient
 from domain import JobDetail
 
@@ -36,21 +36,31 @@ MOCK_APPS_PAGE_1 = {
 }
 
 
-def test_fetch_jobs_single_page():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = MOCK_JOBS_PAGE_1
-        mock_get.return_value = mock_resp
+def _make_http_mock(status_code=200, json_data=None):
+    """httpx.AsyncClient 인스턴스 mock을 반환한다."""
+    mock_http = AsyncMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    if json_data is not None:
+        mock_resp.json.return_value = json_data
+    mock_http.get.return_value = mock_resp
+    mock_http.post.return_value = mock_resp
+    return mock_http, mock_resp
+
+
+async def test_fetch_jobs_single_page():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls:
+        mock_http, _ = _make_http_mock(200, MOCK_JOBS_PAGE_1)
+        mock_cls.return_value = mock_http
 
         client = WantedClient()
-        jobs = client.fetch_jobs(job_group_id=518)
+        jobs = await client.fetch_jobs(job_group_id=518)
 
     assert len(jobs) == 1
     assert jobs[0]["id"] == 1001
 
 
-def test_fetch_jobs_respects_limit_pages():
+async def test_fetch_jobs_respects_limit_pages():
     page_with_next = {
         "data": [{"id": i, "company": {"id": 1, "name": "A"}, "position": "Dev",
                   "address": {"location": "서울"}, "employment_type": "regular",
@@ -60,53 +70,55 @@ def test_fetch_jobs_respects_limit_pages():
                  for i in range(20)],
         "links": {"next": "/api/next?offset=20"}
     }
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls:
+        mock_http = AsyncMock()
+        mock_cls.return_value = mock_http
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = page_with_next
-        mock_get.return_value = mock_resp
+        mock_http.get.return_value = mock_resp
 
         client = WantedClient()
-        jobs = client.fetch_jobs(job_group_id=518, limit_pages=2)
+        jobs = await client.fetch_jobs(job_group_id=518, limit_pages=2)
 
-    assert mock_get.call_count == 2
+    assert mock_http.get.call_count == 2
     assert len(jobs) == 40
 
 
-def test_fetch_applications_requires_cookie():
+async def test_fetch_applications_requires_cookie():
     client = WantedClient(cookie=None, user_id="123")
     with pytest.raises(ValueError, match="WANTED_COOKIE"):
-        client.fetch_applications()
+        await client.fetch_applications()
 
 
-def test_fetch_applications_raises_on_401():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 401
-        mock_get.return_value = mock_resp
+async def test_fetch_applications_raises_on_401():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls:
+        mock_http, _ = _make_http_mock(status_code=401)
+        mock_cls.return_value = mock_http
 
         client = WantedClient(cookie="test-cookie", user_id="123")
         with pytest.raises(PermissionError, match="쿠키"):
-            client.fetch_applications()
+            await client.fetch_applications()
 
 
-def test_fetch_applications_single_page():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = MOCK_APPS_PAGE_1
-        mock_get.return_value = mock_resp
+async def test_fetch_applications_single_page():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls:
+        mock_http, _ = _make_http_mock(200, MOCK_APPS_PAGE_1)
+        mock_cls.return_value = mock_http
 
         client = WantedClient(cookie="test-cookie", user_id="123")
-        apps = client.fetch_applications()
+        apps = await client.fetch_applications()
 
     assert len(apps) == 1
     assert apps[0]["id"] == 9001
 
 
-def test_retry_on_429():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get, \
-         patch("services.wanted.wanted_client.time.sleep") as mock_sleep:
+async def test_retry_on_429():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls, \
+         patch("services.wanted.wanted_client.asyncio.sleep") as mock_sleep:
+        mock_http = AsyncMock()
+        mock_cls.return_value = mock_http
+
         rate_limit_resp = MagicMock()
         rate_limit_resp.status_code = 429
         rate_limit_resp.headers = {}
@@ -115,27 +127,30 @@ def test_retry_on_429():
         ok_resp.status_code = 200
         ok_resp.json.return_value = MOCK_JOBS_PAGE_1
 
-        mock_get.side_effect = [rate_limit_resp, rate_limit_resp, ok_resp]
+        mock_http.get.side_effect = [rate_limit_resp, rate_limit_resp, ok_resp]
 
         client = WantedClient()
-        jobs = client.fetch_jobs(job_group_id=518)
+        jobs = await client.fetch_jobs(job_group_id=518)
 
-    assert mock_get.call_count == 3
+    assert mock_http.get.call_count == 3
     assert mock_sleep.call_count == 2
     assert len(jobs) == 1
 
 
-def test_retry_exhausted_raises():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get, \
-         patch("services.wanted.wanted_client.time.sleep"):
+async def test_retry_exhausted_raises():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls, \
+         patch("services.wanted.wanted_client.asyncio.sleep"):
+        mock_http = AsyncMock()
+        mock_cls.return_value = mock_http
+
         rate_limit_resp = MagicMock()
         rate_limit_resp.status_code = 429
         rate_limit_resp.headers = {}
-        mock_get.return_value = rate_limit_resp
+        mock_http.get.return_value = rate_limit_resp
 
         client = WantedClient()
         with pytest.raises(RuntimeError, match="Rate limit exceeded"):
-            client.fetch_jobs(job_group_id=518)
+            await client.fetch_jobs(job_group_id=518)
 
 
 MOCK_DETAIL_RESPONSE = {
@@ -157,15 +172,13 @@ MOCK_DETAIL_RESPONSE = {
 }
 
 
-def test_fetch_job_detail_success():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = MOCK_DETAIL_RESPONSE
-        mock_get.return_value = mock_resp
+async def test_fetch_job_detail_success():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls:
+        mock_http, _ = _make_http_mock(200, MOCK_DETAIL_RESPONSE)
+        mock_cls.return_value = mock_http
 
         client = WantedClient()
-        result = client.fetch_job_detail(210918)
+        result = await client.fetch_job_detail(210918)
 
     assert result is not None
     assert isinstance(result, JobDetail)
@@ -178,13 +191,12 @@ def test_fetch_job_detail_success():
     ]
 
 
-def test_fetch_job_detail_returns_none_on_error():
-    with patch("services.wanted.wanted_client.httpx.get") as mock_get:
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-        mock_get.return_value = mock_resp
+async def test_fetch_job_detail_returns_none_on_error():
+    with patch("services.wanted.wanted_client.httpx.AsyncClient") as mock_cls:
+        mock_http, _ = _make_http_mock(404)
+        mock_cls.return_value = mock_http
 
         client = WantedClient()
-        result = client.fetch_job_detail(99999)
+        result = await client.fetch_job_detail(99999)
 
     assert result is None

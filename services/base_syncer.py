@@ -8,5 +8,5 @@ class BaseSyncer(ABC):
         self.service = service
 
     @abstractmethod
-    def sync(self, **kwargs) -> str:
+    async def sync(self, **kwargs) -> str:
         ...

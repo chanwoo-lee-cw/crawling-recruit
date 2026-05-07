@@ -1,5 +1,5 @@
+import asyncio
 import os
-import time
 import httpx
 from dotenv import load_dotenv
 from domain import JobDetail
@@ -14,18 +14,18 @@ class WantedClient:
     def __init__(self, cookie: str | None = _UNSET, user_id: str | None = _UNSET):
         self.cookie = cookie if cookie is not _UNSET else os.getenv("WANTED_COOKIE")
         self.user_id = user_id if user_id is not _UNSET else os.getenv("WANTED_USER_ID")
+        self._http = httpx.AsyncClient(timeout=30)
 
-    def _get(self, url: str, params: dict, headers: dict | None = None):
-        resp = None
+    async def _get(self, url: str, params: dict, headers: dict | None = None):
         for attempt in range(WantedClientConst.MAX_RETRIES):
-            resp = httpx.get(url, params=params, headers=headers or {}, timeout=30)
+            resp = await self._http.get(url, params=params, headers=headers or {})
             if resp.status_code != 429:
                 return resp
             wait = int(resp.headers.get("Retry-After", 1))
-            time.sleep(wait)
+            await asyncio.sleep(wait)
         raise RuntimeError(f"Rate limit exceeded after {WantedClientConst.MAX_RETRIES} retries: {url}")
 
-    def fetch_jobs(
+    async def fetch_jobs(
         self,
         job_group_id: int = 518,
         job_ids: list[int] | None = None,
@@ -51,7 +51,7 @@ class WantedClient:
         page = 0
 
         while True:
-            resp = self._get(WantedClientConst.JOBS_API_URL, params)
+            resp = await self._get(WantedClientConst.JOBS_API_URL, params)
             data = resp.json()
             all_jobs.extend(data.get("data", []))
             page += 1
@@ -65,7 +65,7 @@ class WantedClient:
 
         return all_jobs
 
-    def fetch_applications(self) -> list[dict]:
+    async def fetch_applications(self) -> list[dict]:
         if not self.cookie:
             raise ValueError("WANTED_COOKIE가 .env에 설정되지 않았습니다.")
         if not self.user_id:
@@ -90,7 +90,7 @@ class WantedClient:
         all_apps = []
 
         while True:
-            resp = self._get(WantedClientConst.APPS_API_URL, params, headers=headers)
+            resp = await self._get(WantedClientConst.APPS_API_URL, params, headers=headers)
 
             if resp.status_code in (401, 403):
                 raise PermissionError(
@@ -108,11 +108,10 @@ class WantedClient:
 
         return all_apps
 
-    def fetch_job_detail(self, job_id: int) -> JobDetail | None:
-        """단일 공고 detail 조회. 실패 시 None 반환."""
+    async def fetch_job_detail(self, job_id: int) -> JobDetail | None:
         url = WantedClientConst.DETAIL_API_URL.format(job_id=job_id)
         try:
-            resp = self._get(url, params={})
+            resp = await self._get(url, params={})
         except RuntimeError:
             return None
         if resp.status_code != 200:

@@ -12,6 +12,7 @@ from tools.list_skill_keywords import list_skill_keywords
 from tools.save_job_evaluations import save_job_evaluations
 from tools.save_search_preset import save_search_preset
 from tools.skip_jobs import skip_jobs
+from tools.sync_all_jobs import sync_all_jobs
 from tools.sync_applications import sync_applications
 from tools.sync_job_details import sync_job_details
 from tools.wanted_sync_jobs import wanted_sync_jobs
@@ -20,6 +21,7 @@ mcp = FastMCP("wanted-jobs")
 
 mcp.tool()(wanted_sync_jobs)
 mcp.tool()(remember_sync_jobs)
+mcp.tool()(sync_all_jobs)
 mcp.tool()(sync_applications)
 mcp.tool()(get_unapplied_jobs)
 mcp.tool()(save_search_preset)

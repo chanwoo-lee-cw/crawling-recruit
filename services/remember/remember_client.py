@@ -11,15 +11,13 @@ class RememberClient:
     def __init__(self):
         self._cookie = os.getenv("REMEMBER_COOKIE")
         self._auth_token = os.getenv("REMEMBER_AUTH_TOKEN")
+        self._http = httpx.AsyncClient(timeout=30)
 
     @property
     def _auth_headers(self) -> dict:
-        headers = {}
         if self._auth_token:
-            headers["Authorization"] = f"Token token={self._auth_token}"
-        else:
-            raise ValueError("REMEMBER_AUTH_TOKEN이 .env에 설정되지 않았습니다.")
-        return headers
+            return {"Authorization": f"Token token={self._auth_token}"}
+        raise ValueError("REMEMBER_AUTH_TOKEN이 .env에 설정되지 않았습니다.")
 
     def _validate_auth_values(self):
         for key, value in [("REMEMBER_COOKIE", self._cookie), ("REMEMBER_AUTH_TOKEN", self._auth_token)]:
@@ -29,7 +27,7 @@ class RememberClient:
                 except UnicodeEncodeError:
                     raise ValueError(f"{key} 값에 한글이 포함되어 있습니다. .env에 실제 브라우저 값을 붙여넣어 주세요.")
 
-    def fetch_jobs(
+    async def fetch_jobs(
             self,
             job_category_names: list[dict],
             min_experience: int = 0,
@@ -51,7 +49,11 @@ class RememberClient:
                 "page": page,
                 "per": per,
             }
-            resp = httpx.post(RememberClientConst.JOBS_SEARCH_URL, json=payload, headers=self._auth_headers, timeout=30)
+            resp = await self._http.post(
+                RememberClientConst.JOBS_SEARCH_URL,
+                json=payload,
+                headers=self._auth_headers,
+            )
             resp.raise_for_status()
             data = resp.json()
             all_jobs.extend(data.get("data", []))
@@ -63,7 +65,7 @@ class RememberClient:
             page += 1
         return all_jobs
 
-    def fetch_applications(self) -> list[dict]:
+    async def fetch_applications(self) -> list[dict]:
         if not self._cookie and not self._auth_token:
             raise ValueError("REMEMBER_COOKIE 또는 REMEMBER_AUTH_TOKEN이 .env에 설정되지 않았습니다.")
         self._validate_auth_values()
@@ -71,11 +73,10 @@ class RememberClient:
         all_apps = []
         page = 1
         while True:
-            resp = httpx.get(
+            resp = await self._http.get(
                 RememberClientConst.APPLICATIONS_URL,
                 params={"statuses[]": "applied", "page": page, "include_canceled": "false"},
                 headers=self._auth_headers,
-                timeout=30,
             )
             if resp.status_code in (401, 403):
                 raise PermissionError("Remeber 쿠키가 만료되었습니다. .env의 REMEMBER_COOKIE를 갱신해주세요.")

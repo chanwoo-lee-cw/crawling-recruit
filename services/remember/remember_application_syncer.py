@@ -4,10 +4,10 @@ from services.base_syncer import BaseSyncer
 
 
 class RememberApplicationSyncer(BaseSyncer):
-    def sync(self) -> str:
+    async def sync(self) -> str:
         try:
             client = RememberClient()
-            apps = client.fetch_applications()
+            apps = await client.fetch_applications()
             return self.service.upsert_applications(apps, source=REMEMBER)
         except (PermissionError, ValueError) as e:
             return str(e)

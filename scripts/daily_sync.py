@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 from datetime import datetime
@@ -27,16 +28,16 @@ def log(msg: str):
     print(f"[{ts}] {msg}", flush=True)
 
 
-def run():
+async def run():
     log("=== daily sync start ===")
 
     synced_count = 0
     for source in SOURCES:
         try:
             if source == WANTED:
-                wanted_sync()
+                await wanted_sync()
             elif source == REMEMBER:
-                remember_sync()
+                await remember_sync()
             else:
                 raise RuntimeError(f"정의되지 않은 source[{source}] 입니다.")
             synced_count += 1
@@ -47,14 +48,14 @@ def run():
         log("모든 sync_jobs 실패 - sync_job_details 스킵")
     else:
         try:
-            result = sync_job_details()
+            result = await sync_job_details()
             log(f"sync_job_details: {result}")
         except Exception as e:
             log(f"sync_job_details: 오류 - {e}")
 
     for source in SOURCES:
         try:
-            result = sync_applications(source=source)
+            result = await sync_applications(source=source)
             log(f"sync_applications({source}): {result}")
         except Exception as e:
             log(f"sync_applications({source}): 오류 - {e}")
@@ -62,18 +63,18 @@ def run():
     log("=== daily sync end ===")
 
 
-def wanted_sync():
+async def wanted_sync():
     for sort in WantedJobSort:
         try:
-            result = wanted_sync_jobs(job_sort=sort.value)
+            result = await wanted_sync_jobs(job_sort=sort.value)
             log(f"wanted_sync_jobs({sort.name}): {result}")
         except Exception as e:
             log(f"wanted_sync_jobs({sort.name}): 오류 - {e}")
 
 
-def remember_sync():
+async def remember_sync():
     try:
-        result = remember_sync_jobs(
+        result = await remember_sync_jobs(
             job_category_names=[{"name": cat.value} for cat in RememberJobCategory]
         )
         log(f"remember_sync_jobs: {result}")
@@ -82,4 +83,4 @@ def remember_sync():
 
 
 if __name__ == "__main__":
-    run()
+    asyncio.run(run())

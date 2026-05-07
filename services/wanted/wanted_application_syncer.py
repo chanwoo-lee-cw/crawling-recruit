@@ -4,10 +4,10 @@ from services.wanted.wanted_constants import WANTED
 
 
 class WantedApplicationSyncer(BaseSyncer):
-    def sync(self) -> str:
+    async def sync(self) -> str:
         try:
             client = WantedClient()
-            apps = client.fetch_applications()
+            apps = await client.fetch_applications()
             return self.service.upsert_applications(apps, source=WANTED)
         except (PermissionError, ValueError) as e:
             return str(e)

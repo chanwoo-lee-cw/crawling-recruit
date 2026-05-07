@@ -1,26 +1,26 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from domain import JobDetail
 from constants import CRAWL_DELAY_SECONDS, DEFAULT_LIMIT_PAGES
 from services.remember.remember_constants import REMEMBER
 from services.wanted.wanted_constants import WANTED
 
 
-def test_sync_jobs_uses_preset_when_given():
+async def test_sync_jobs_uses_preset_when_given():
     with patch("tools.wanted_sync_jobs.get_engine") as mock_engine, \
          patch("services.wanted.wanted_syncer.WantedClient") as mock_client_cls, \
          patch("tools.wanted_sync_jobs.JobService") as mock_service_cls:
 
         mock_service = MagicMock()
-        mock_service.get_preset_params.return_value = {"job_group_id": 519}
+        mock_service.get_preset_params.return_value = MagicMock(params={"job_group_id": 519})
         mock_service.upsert_jobs.return_value = "동기화 완료: 신규/변경 5개, 총 5개 처리"
         mock_service_cls.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_jobs.return_value = []
         mock_client_cls.return_value = mock_client
 
         from tools.wanted_sync_jobs import wanted_sync_jobs
-        result = wanted_sync_jobs(preset_name="백엔드 신입")
+        result = await wanted_sync_jobs(preset_name="백엔드 신입")
 
     mock_service.get_preset_params.assert_called_once_with("백엔드 신입")
     mock_service.upsert_jobs.assert_called_once()
@@ -28,17 +28,17 @@ def test_sync_jobs_uses_preset_when_given():
     assert call_kwargs.get("job_group_id") == 519
 
 
-def test_sync_applications_returns_error_on_permission_error():
+async def test_sync_applications_returns_error_on_permission_error():
     with patch("tools.sync_applications.get_engine"), \
          patch("services.wanted.wanted_application_syncer.WantedClient") as mock_client_cls, \
          patch("tools.sync_applications.JobService"):
 
-        mock_client = MagicMock()
-        mock_client.fetch_applications.side_effect = PermissionError("쿠키가 만료되었습니다.")
+        mock_client = AsyncMock()
+        mock_client.fetch_applications = AsyncMock(side_effect=PermissionError("쿠키가 만료되었습니다."))
         mock_client_cls.return_value = mock_client
 
         from tools.sync_applications import sync_applications
-        result = sync_applications()
+        result = await sync_applications()
 
     assert "쿠키" in result
 
@@ -76,36 +76,37 @@ def test_save_preset_returns_error_on_invalid_key():
 from tools.sync_job_details import sync_job_details
 
 
-def test_sync_job_details_processes_missing():
+async def test_sync_job_details_processes_missing():
     with patch("tools.sync_job_details.get_engine"), \
          patch("tools.sync_job_details.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.time.sleep") as mock_sleep:
+         patch("tools.sync_job_details.asyncio.sleep") as mock_sleep:
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
         mock_service.upsert_job_details.return_value = "완료: 2개 처리"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_job_detail.side_effect = [
             JobDetail(job_id=101, requirements="req1", preferred_points="pref1", skill_tags=[]),
             JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
         ]
         MockClient.return_value = mock_client
 
-        result = sync_job_details()
+        from tools.sync_job_details import sync_job_details
+        result = await sync_job_details()
 
     assert "2개 처리" in result
     assert mock_client.fetch_job_detail.call_count == 2
     mock_sleep.assert_called_once_with(CRAWL_DELAY_SECONDS)
 
 
-def test_sync_job_details_skips_failed_fetch():
+async def test_sync_job_details_skips_failed_fetch():
     with patch("tools.sync_job_details.get_engine"), \
          patch("tools.sync_job_details.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("tools.sync_job_details.time.sleep"):
+         patch("tools.sync_job_details.asyncio.sleep"):
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
@@ -114,18 +115,48 @@ def test_sync_job_details_skips_failed_fetch():
         mock_service.upsert_job_details.return_value = "완료: 1개 처리"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_job_detail.side_effect = [
-            None,  # 101 실패
+            None,
             JobDetail(job_id=102, requirements="req2", preferred_points=None, skill_tags=[]),
         ]
         MockClient.return_value = mock_client
 
-        result = sync_job_details()
+        from tools.sync_job_details import sync_job_details
+        result = await sync_job_details()
 
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
-    assert called_details[0].job_id == 102  # 속성 접근
+    assert called_details[0].job_id == 102
+
+
+async def test_sync_job_details_calls_enrich_for_each_detail():
+    detail_101 = JobDetail(job_id=101, requirements="Python 경험", preferred_points=None, skill_tags=[])
+    detail_102 = JobDetail(job_id=102, requirements="Java 경험", preferred_points=None, skill_tags=[])
+
+    with patch("tools.sync_job_details.get_engine"), \
+         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("tools.sync_job_details.JobService") as MockService, \
+         patch("tools.sync_job_details.asyncio.sleep"):
+
+        mock_service = MagicMock()
+        mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.list_keywords.return_value = ["Python", "Java"]
+        mock_service.enrich_skill_tags.side_effect = lambda d, kw: d
+        mock_service.upsert_job_details.return_value = "완료: 2개 처리"
+        MockService.return_value = mock_service
+
+        mock_client = AsyncMock()
+        mock_client.fetch_job_detail.side_effect = [detail_101, detail_102]
+        MockClient.return_value = mock_client
+
+        from tools.sync_job_details import sync_job_details
+        await sync_job_details()
+
+    mock_service.list_keywords.assert_called_once()
+    assert mock_service.enrich_skill_tags.call_count == 2
+    mock_service.enrich_skill_tags.assert_any_call(detail_101, ["Python", "Java"])
+    mock_service.enrich_skill_tags.assert_any_call(detail_102, ["Python", "Java"])
 
 
 def test_sync_job_details_calls_enrich_for_each_detail():
@@ -171,22 +202,22 @@ def test_skip_jobs_tool_calls_service():
     assert "2개 공고 제외 완료" in result
 
 
-def test_sync_jobs_remember_calls_remember_client():
+async def test_sync_jobs_remember_calls_remember_client():
     with patch("tools.remember_sync_jobs.get_engine"), \
          patch("services.remember.remember_syncer.RememberClient") as MockRememberClient, \
          patch("tools.remember_sync_jobs.JobService") as MockService:
 
         mock_service = MagicMock()
-        mock_service.get_preset_params.return_value = {}
+        mock_service.get_preset_params.return_value = None
         mock_service.upsert_jobs.return_value = "동기화 완료: 신규 3개, 변경 0개, 유지 0개"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_jobs.return_value = []
         MockRememberClient.return_value = mock_client
 
         from tools.remember_sync_jobs import remember_sync_jobs
-        result = remember_sync_jobs(
+        result = await remember_sync_jobs(
             job_category_names=[{"level1": "SW개발", "level2": "백엔드"}],
             min_experience=2,
             max_experience=5,
@@ -202,7 +233,7 @@ def test_sync_jobs_remember_calls_remember_client():
     mock_service.upsert_remember_details.assert_called_once_with([])
 
 
-def test_sync_applications_remember_calls_remember_client():
+async def test_sync_applications_remember_calls_remember_client():
     with patch("tools.sync_applications.get_engine"), \
          patch("services.remember.remember_application_syncer.RememberClient") as MockRememberClient, \
          patch("tools.sync_applications.JobService") as MockService:
@@ -211,15 +242,69 @@ def test_sync_applications_remember_calls_remember_client():
         mock_service.upsert_applications.return_value = "지원현황 동기화 완료: 총 2건"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_applications.return_value = []
         MockRememberClient.return_value = mock_client
 
         from tools.sync_applications import sync_applications
-        result = sync_applications(source=REMEMBER)
+        result = await sync_applications(source=REMEMBER)
 
     mock_client.fetch_applications.assert_called_once()
     mock_service.upsert_applications.assert_called_once_with([], source=REMEMBER)
+
+
+async def test_sync_all_jobs_returns_both_results():
+    with patch("tools.sync_all_jobs.get_engine"), \
+         patch("tools.sync_all_jobs.JobService") as mock_service_cls, \
+         patch("tools.sync_all_jobs.WantedSyncer") as mock_wanted_cls, \
+         patch("tools.sync_all_jobs.RememberSyncer") as mock_remember_cls:
+
+        mock_service = MagicMock()
+        mock_service.get_preset_params.return_value = None
+        mock_service_cls.return_value = mock_service
+
+        mock_wanted = AsyncMock()
+        mock_wanted.sync.return_value = "Wanted: 신규 5개"
+        mock_wanted_cls.return_value = mock_wanted
+
+        mock_remember = AsyncMock()
+        mock_remember.sync.return_value = "Remember: 신규 3개"
+        mock_remember_cls.return_value = mock_remember
+
+        from tools.sync_all_jobs import sync_all_jobs
+        result = await sync_all_jobs()
+
+    assert "[Wanted]" in result
+    assert "Wanted: 신규 5개" in result
+    assert "[Remember]" in result
+    assert "Remember: 신규 3개" in result
+
+
+async def test_sync_all_jobs_handles_partial_failure():
+    with patch("tools.sync_all_jobs.get_engine"), \
+         patch("tools.sync_all_jobs.JobService") as mock_service_cls, \
+         patch("tools.sync_all_jobs.WantedSyncer") as mock_wanted_cls, \
+         patch("tools.sync_all_jobs.RememberSyncer") as mock_remember_cls:
+
+        mock_service = MagicMock()
+        mock_service.get_preset_params.return_value = None
+        mock_service_cls.return_value = mock_service
+
+        mock_wanted = AsyncMock()
+        mock_wanted.sync.side_effect = PermissionError("쿠키가 만료되었습니다.")
+        mock_wanted_cls.return_value = mock_wanted
+
+        mock_remember = AsyncMock()
+        mock_remember.sync.return_value = "Remember: 신규 3개"
+        mock_remember_cls.return_value = mock_remember
+
+        from tools.sync_all_jobs import sync_all_jobs
+        result = await sync_all_jobs()
+
+    assert "[Wanted]" in result
+    assert "오류" in result
+    assert "[Remember]" in result
+    assert "Remember: 신규 3개" in result
 
 
 def test_get_job_candidates_returns_url():
