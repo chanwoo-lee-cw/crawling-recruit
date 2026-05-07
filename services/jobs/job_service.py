@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timezone
 
 from db.models import SearchPreset
@@ -10,6 +11,7 @@ from db.repositories.application_repository import ApplicationRepository
 from db.repositories.job_skip_repository import JobSkipRepository
 from db.repositories.job_evaluation_repository import JobEvaluationRepository
 from db.repositories.job_repository import JobRepository
+from db.repositories.skill_keyword_repository import SkillKeywordRepository
 from db.transaction import transactional, get_current_session
 from domain import JobCandidate, JobDetail
 
@@ -348,3 +350,37 @@ class JobService:
         with_detail = [r for r in rows if r.fetched_at is not None]
         scored = sorted(with_detail, key=score, reverse=True)
         return scored[:top_k]
+
+    @transactional()
+    def add_keyword(self, keyword: str) -> str:
+        keyword = keyword.strip()
+        added = SkillKeywordRepository(get_current_session()).add(keyword)
+        if not added:
+            return f"이미 존재하는 키워드입니다: {keyword}"
+        return f"키워드가 추가되었습니다: {keyword}"
+
+    @transactional()
+    def list_keywords(self) -> list[str]:
+        return SkillKeywordRepository(get_current_session()).find_all()
+
+    @transactional()
+    def delete_keyword(self, keyword: str) -> str:
+        deleted = SkillKeywordRepository(get_current_session()).delete(keyword)
+        if not deleted:
+            return f"존재하지 않는 키워드입니다: {keyword}"
+        return f"키워드가 삭제되었습니다: {keyword}"
+
+    def enrich_skill_tags(self, job_detail: JobDetail, keywords: list[str]) -> JobDetail:
+        if not keywords:
+            return job_detail
+        text = f"{job_detail.requirements or ''} {job_detail.preferred_points or ''}"
+        existing = {t["text"].lower() for t in (job_detail.skill_tags or [])}
+        new_tags = list(job_detail.skill_tags or [])
+        for kw in keywords:
+            if kw.lower() in existing:
+                continue
+            if re.search(r'(?<!\w)' + re.escape(kw) + r'(?!\w)', text, re.IGNORECASE):
+                new_tags.append({"text": kw})
+                existing.add(kw.lower())
+        job_detail.skill_tags = new_tags
+        return job_detail
