@@ -6,21 +6,20 @@ from services.wanted.wanted_constants import WantedJobGroupId, WANTED
 from services.wanted.wanted_syncer import WantedSyncer
 
 
-def wanted_sync_jobs(
+async def wanted_sync_jobs(
         job_group_id: int = WantedJobGroupId.SERVER_DEVELOPER.value,
         job_ids: list[int] | None = None,
         years: list[int] | None = None,
         locations: str = "all",
         limit_pages: int | None = DEFAULT_LIMIT_PAGES,
         job_sort: str = "job.popularity_order",
+        preset_name: str | None = None,
 ) -> str:
-    """
-    채용공고를 동기화한다.
-    """
+    """채용공고를 동기화한다."""
     engine = get_engine()
     service = JobService(engine)
 
-    preset: SearchPreset | None = service.get_preset_params(WANTED)
+    preset: SearchPreset | None = service.get_preset_params(preset_name or WANTED)
     if preset:
         p = preset.params
         job_group_id = p.get("job_group_id", job_group_id)
@@ -30,7 +29,7 @@ def wanted_sync_jobs(
         limit_pages = p.get("limit_pages", limit_pages)
         job_sort = p.get("job_sort", job_sort)
 
-    return WantedSyncer(service).sync(
+    return await WantedSyncer(service).sync(
         job_group_id=job_group_id,
         job_ids=job_ids,
         years=years,

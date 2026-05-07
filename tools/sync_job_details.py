@@ -1,4 +1,4 @@
-import time
+import asyncio
 
 from constants import CRAWL_DELAY_SECONDS
 from db.connection import get_engine
@@ -6,7 +6,7 @@ from services.jobs.job_service import JobService
 from services.wanted.wanted_client import WantedClient
 
 
-def sync_job_details(
+async def sync_job_details(
     job_ids: list[int] | None = None,
     limit: int | None = None,
 ) -> str:
@@ -21,12 +21,16 @@ def sync_job_details(
     fetched = []
     for i, job_id in enumerate(target_ids):
         if i > 0:
-            time.sleep(CRAWL_DELAY_SECONDS)
-        detail = client.fetch_job_detail(job_id)
+            await asyncio.sleep(CRAWL_DELAY_SECONDS)
+        detail = await client.fetch_job_detail(job_id)
         if detail is None:
             continue
         fetched.append(detail)
 
     if not fetched:
         return "상세 정보를 가져온 공고가 없습니다."
+
+    keywords = service.list_keywords()
+    fetched = [service.enrich_skill_tags(d, keywords) for d in fetched]
+
     return service.upsert_job_details(fetched)
