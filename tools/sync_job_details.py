@@ -29,4 +29,8 @@ def sync_job_details(
 
     if not fetched:
         return "상세 정보를 가져온 공고가 없습니다."
+
+    keywords = service.list_keywords()
+    fetched = [service.enrich_skill_tags(d, keywords) for d in fetched]
+
     return service.upsert_job_details(fetched)

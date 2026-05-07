@@ -109,6 +109,8 @@ def test_sync_job_details_skips_failed_fetch():
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.list_keywords.return_value = []
+        mock_service.enrich_skill_tags.side_effect = lambda d, kw: d  # pass-through
         mock_service.upsert_job_details.return_value = "완료: 1개 처리"
         MockService.return_value = mock_service
 
@@ -124,6 +126,34 @@ def test_sync_job_details_skips_failed_fetch():
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
     assert called_details[0].job_id == 102  # 속성 접근
+
+
+def test_sync_job_details_calls_enrich_for_each_detail():
+    detail_101 = JobDetail(job_id=101, requirements="Python 경험", preferred_points=None, skill_tags=[])
+    detail_102 = JobDetail(job_id=102, requirements="Java 경험", preferred_points=None, skill_tags=[])
+
+    with patch("tools.sync_job_details.get_engine"), \
+         patch("tools.sync_job_details.WantedClient") as MockClient, \
+         patch("tools.sync_job_details.JobService") as MockService, \
+         patch("tools.sync_job_details.time.sleep"):
+
+        mock_service = MagicMock()
+        mock_service.get_jobs_without_details.return_value = [101, 102]
+        mock_service.list_keywords.return_value = ["Python", "Java"]
+        mock_service.enrich_skill_tags.side_effect = lambda d, kw: d
+        mock_service.upsert_job_details.return_value = "완료: 2개 처리"
+        MockService.return_value = mock_service
+
+        mock_client = MagicMock()
+        mock_client.fetch_job_detail.side_effect = [detail_101, detail_102]
+        MockClient.return_value = mock_client
+
+        sync_job_details()
+
+    mock_service.list_keywords.assert_called_once()
+    assert mock_service.enrich_skill_tags.call_count == 2
+    mock_service.enrich_skill_tags.assert_any_call(detail_101, ["Python", "Java"])
+    mock_service.enrich_skill_tags.assert_any_call(detail_102, ["Python", "Java"])
 
 
 def test_skip_jobs_tool_calls_service():
