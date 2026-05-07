@@ -330,3 +330,58 @@ def test_get_job_candidates_passes_include_evaluated():
         employment_type=None,
         include_evaluated=True,
     )
+
+
+def test_add_skill_keyword_success():
+    with patch("tools.add_skill_keyword.get_engine"), \
+         patch("tools.add_skill_keyword.JobService") as MockService:
+        mock_service = MagicMock()
+        mock_service.add_keyword.return_value = "키워드가 추가되었습니다: Python"
+        MockService.return_value = mock_service
+
+        from tools.add_skill_keyword import add_skill_keyword
+        result = add_skill_keyword("Python")
+
+    assert result == "키워드가 추가되었습니다: Python"
+    mock_service.add_keyword.assert_called_once_with("Python")
+
+
+def test_list_skill_keywords_returns_markdown():
+    with patch("tools.list_skill_keywords.get_engine"), \
+         patch("tools.list_skill_keywords.JobService") as MockService:
+        mock_service = MagicMock()
+        mock_service.list_keywords.return_value = ["AWS", "Python"]
+        MockService.return_value = mock_service
+
+        from tools.list_skill_keywords import list_skill_keywords
+        result = list_skill_keywords()
+
+    assert "AWS" in result
+    assert "Python" in result
+
+
+def test_list_skill_keywords_empty():
+    with patch("tools.list_skill_keywords.get_engine"), \
+         patch("tools.list_skill_keywords.JobService") as MockService:
+        mock_service = MagicMock()
+        mock_service.list_keywords.return_value = []
+        MockService.return_value = mock_service
+
+        from tools.list_skill_keywords import list_skill_keywords
+        result = list_skill_keywords()
+
+    assert result == "등록된 키워드가 없습니다."
+
+
+def test_delete_skill_keyword_success():
+    with patch("tools.delete_skill_keyword.get_engine"), \
+         patch("tools.delete_skill_keyword.JobService") as MockService:
+        mock_service = MagicMock()
+        mock_service.delete_keyword.return_value = "키워드가 삭제되었습니다: Python"
+        MockService.return_value = mock_service
+
+        from tools.delete_skill_keyword import delete_skill_keyword
+        result = delete_skill_keyword("Python")
+
+    assert result == "키워드가 삭제되었습니다: Python"
+    mock_service.delete_keyword.assert_called_once_with("Python")
