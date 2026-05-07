@@ -115,10 +115,10 @@ def delete_skill_keyword(keyword: str) -> str
 def add_keyword(self, keyword: str) -> str
 def list_keywords(self) -> list[str]
 def delete_keyword(self, keyword: str) -> str
-def extract_keywords_from_text(self, text: str, keywords: list[str]) -> list[str]
+def enrich_skill_tags(self, job_detail: JobDetail) -> JobDetail
 ```
 
-툴은 얇은 래퍼, 비즈니스 로직은 `JobService`에 집중.
+- `enrich_skill_tags`: DB에서 키워드 로드 → 텍스트 스캔 → 병합까지 한 번에 처리. 툴은 얇은 래퍼, 비즈니스 로직은 `JobService`에 집중.
 
 ---
 
@@ -127,20 +127,13 @@ def extract_keywords_from_text(self, text: str, keywords: list[str]) -> list[str
 `upsert_job_details` 호출 전에 파싱 단계 삽입:
 
 ```python
-keywords = service.list_keywords()  # 키워드 로드 (1회)
 for job_detail in fetched:
-    parsed = service.extract_keywords_from_text(
-        (job_detail.requirements or "") + " " + (job_detail.preferred_points or ""),
-        keywords
-    )
-    # 기존 skill_tags에 없는 키워드만 병합
-    existing = {t["text"].lower() for t in (job_detail.skill_tags or [])}
-    for kw in parsed:
-        if kw.lower() not in existing:
-            job_detail.skill_tags = (job_detail.skill_tags or []) + [{"text": kw}]
+    job_detail = service.enrich_skill_tags(job_detail)  # 키워드 병합
+
+service.upsert_job_details(fetched)
 ```
 
-키워드 목록이 비어있으면 파싱 단계 전체를 건너뜀.
+`enrich_skill_tags` 내부에서 키워드가 비어있으면 즉시 반환하므로 툴 코드는 조건 분기 없음.
 
 ---
 
