@@ -12,6 +12,7 @@ from services.kakaobank.kakaobank_constants import KAKAO_BANK, KAKAOBANK_JOB_URL
 from services.woowahan.woowahan_constants import WOOWAHAN, WOOWAHAN_JOB_BASE_URL
 from services.cj.cj_constants import CJ, CJ_JOB_URL_PREFIX
 from services.kt.kt_constants import KT, KT_JOB_BASE_URL
+from services.samsung.samsung_constants import SAMSUNG, SAMSUNG_JOB_BASE_URL
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -39,6 +40,7 @@ JOB_BASE_URLS = {
     KAKAO_BANK: KAKAOBANK_JOB_URL,
     WOOWAHAN: WOOWAHAN_JOB_BASE_URL,
     KT: KT_JOB_BASE_URL,
+    SAMSUNG: SAMSUNG_JOB_BASE_URL,
 }
 
 
@@ -281,6 +283,28 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_samsung_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        emp_raw = raw.get("employment_type")
+        employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_raw) if emp_raw else None
+        return {
+            "source": SAMSUNG,
+            "platform_id": int(raw["id"]),
+            "company_id": None,
+            "company_name": raw.get("company", "삼성"),
+            "title": raw.get("title", ""),
+            "location": None,
+            "employment_type": employment_type,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
     def _parse_naver_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         emp_type_raw = raw.get("empTypeCdNm")
@@ -336,6 +360,8 @@ class JobService:
             return self._parse_cj_job(raw)
         if source == KT:
             return self._parse_kt_job(raw)
+        if source == SAMSUNG:
+            return self._parse_samsung_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
