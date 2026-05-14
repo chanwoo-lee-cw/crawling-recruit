@@ -10,6 +10,7 @@ from services.naver.naver_constants import NAVER, NAVER_JOB_BASE_URL
 from services.coupang.coupang_constants import COUPANG, COUPANG_JOB_BASE_URL
 from services.kakaobank.kakaobank_constants import KAKAO_BANK, KAKAOBANK_JOB_URL
 from services.woowahan.woowahan_constants import WOOWAHAN, WOOWAHAN_JOB_BASE_URL
+from services.cj.cj_constants import CJ, CJ_JOB_URL_PREFIX
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -36,10 +37,17 @@ JOB_BASE_URLS = {
     COUPANG: COUPANG_JOB_BASE_URL,
     KAKAO_BANK: KAKAOBANK_JOB_URL,
     WOOWAHAN: WOOWAHAN_JOB_BASE_URL,
+    CJ: "https://recruit.cj.net",
 }
 
 
+# platform_id로 단순 prefix+id 조합이 안 되는 소스용 포매터
+JOB_URL_FORMATTERS: dict[str, callable] = {}
+
+
 def build_job_url(source: str, platform_id: int) -> str:
+    if source in JOB_URL_FORMATTERS:
+        return JOB_URL_FORMATTERS[source](platform_id)
     base_url = JOB_BASE_URLS.get(source, WANTED_JOB_BASE_URL)
     if base_url.endswith("="):
         return f"{base_url}{platform_id}"
@@ -216,6 +224,28 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_cj_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        zz_jo_num = raw.get("zz_jo_num", "")
+        platform_id = int(zz_jo_num[1:]) if zz_jo_num.startswith("J") else int(zz_jo_num)
+        return {
+            "source": CJ,
+            "platform_id": platform_id,
+            "company_id": None,
+            "company_name": raw.get("compnm", "CJ"),
+            "title": raw.get("zz_title", ""),
+            "location": raw.get("location_cd_nm"),
+            "employment_type": None,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
     def _parse_naver_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         emp_type_raw = raw.get("empTypeCdNm")
@@ -267,6 +297,8 @@ class JobService:
             return self._parse_kakaobank_job(raw)
         if source == WOOWAHAN:
             return self._parse_woowahan_job(raw)
+        if source == CJ:
+            return self._parse_cj_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
@@ -618,3 +650,6 @@ class JobService:
                 existing.add(kw.lower())
         job_detail.skill_tags = new_tags
         return job_detail
+
+
+JOB_URL_FORMATTERS[CJ] = lambda pid: f"{CJ_JOB_URL_PREFIX}{pid}"
