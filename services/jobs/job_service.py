@@ -13,6 +13,7 @@ from services.woowahan.woowahan_constants import WOOWAHAN, WOOWAHAN_JOB_BASE_URL
 from services.cj.cj_constants import CJ, CJ_JOB_URL_PREFIX
 from services.kt.kt_constants import KT, KT_JOB_BASE_URL
 from services.samsung.samsung_constants import SAMSUNG, SAMSUNG_JOB_BASE_URL
+from services.sk.sk_constants import SK, SK_JOB_URL_PREFIX
 from db.repositories.search_preset_repository import SearchPresetRepository
 from db.repositories.job_detail_repository import JobDetailRepository
 from db.repositories.application_repository import ApplicationRepository
@@ -305,6 +306,30 @@ class JobService:
             "updated_at": None,
         }
 
+    def _parse_sk_job(self, raw: dict) -> dict:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        notice_id = raw.get("noticeID", "")
+        platform_id = int(notice_id[1:]) if notice_id.startswith("R") else raw.get("jobNoticeNo", 0)
+        emp_raw = raw.get("workingType")
+        employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_raw) if emp_raw else None
+        return {
+            "source": SK,
+            "platform_id": int(platform_id),
+            "company_id": None,
+            "company_name": raw.get("corpName", "SK"),
+            "title": raw.get("title", ""),
+            "location": raw.get("workingArea"),
+            "employment_type": employment_type,
+            "annual_from": None,
+            "annual_to": None,
+            "job_group_id": None,
+            "category_tag_id": None,
+            "is_active": True,
+            "created_at": None,
+            "synced_at": now,
+            "updated_at": None,
+        }
+
     def _parse_naver_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         emp_type_raw = raw.get("empTypeCdNm")
@@ -362,6 +387,8 @@ class JobService:
             return self._parse_kt_job(raw)
         if source == SAMSUNG:
             return self._parse_samsung_job(raw)
+        if source == SK:
+            return self._parse_sk_job(raw)
         return self._parse_wanted_job(raw)
 
     def _parse_wanted_applications(self, raw_apps: list[dict]) -> list[dict]:
@@ -716,3 +743,4 @@ class JobService:
 
 
 JOB_URL_FORMATTERS[CJ] = lambda pid: f"{CJ_JOB_URL_PREFIX}{pid}"
+JOB_URL_FORMATTERS[SK] = lambda pid: f"{SK_JOB_URL_PREFIX}{pid}"
