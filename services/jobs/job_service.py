@@ -37,7 +37,6 @@ JOB_BASE_URLS = {
     COUPANG: COUPANG_JOB_BASE_URL,
     KAKAO_BANK: KAKAOBANK_JOB_URL,
     WOOWAHAN: WOOWAHAN_JOB_BASE_URL,
-    CJ: "https://recruit.cj.net",
 }
 
 
@@ -226,7 +225,7 @@ class JobService:
 
     def _parse_cj_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        zz_jo_num = raw.get("zz_jo_num", "")
+        zz_jo_num = raw["zz_jo_num"]
         platform_id = int(zz_jo_num[1:]) if zz_jo_num.startswith("J") else int(zz_jo_num)
         return {
             "source": CJ,
