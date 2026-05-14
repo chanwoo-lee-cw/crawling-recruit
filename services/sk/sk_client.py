@@ -1,5 +1,4 @@
 import httpx
-from bs4 import BeautifulSoup
 from services.sk.sk_constants import SK_LIST_URL, SK_DETAIL_BASE_URL
 
 
