@@ -250,7 +250,10 @@ class JobService:
     def _parse_kt_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         notice_url = raw.get("recruitNoticeUrl", "")
-        platform_id = int(notice_url.rsplit("/", 1)[-1]) if notice_url and "/" in notice_url else raw["recruitNoticeSn"]
+        try:
+            platform_id = int(notice_url.rsplit("/", 1)[-1]) if notice_url and "/" in notice_url else int(raw["recruitNoticeSn"])
+        except (ValueError, IndexError, KeyError):
+            platform_id = int(raw.get("recruitNoticeSn") or raw.get("recruitNoticeNo", 0))
         emp_raw = raw.get("recruitClassName")
         employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_raw) if emp_raw else None
         created_at = None
