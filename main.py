@@ -1,10 +1,12 @@
 from fastmcp import FastMCP
 
 from db.connection import create_tables
+from tools.cj_sync_jobs import cj_sync_jobs
 from tools.coupang_sync_jobs import coupang_sync_jobs
 from tools.get_job_candidates import get_job_candidates
 from tools.get_unapplied_jobs import get_unapplied_jobs
 from tools.kakaobank_sync_jobs import kakaobank_sync_jobs
+from tools.kt_sync_jobs import kt_sync_jobs
 from tools.list_search_presets import list_search_presets
 from tools.migrate_db import migrate_db
 from tools.naver_sync_jobs import naver_sync_jobs
@@ -13,8 +15,10 @@ from tools.remember_sync_jobs import remember_sync_jobs
 from tools.add_skill_keyword import add_skill_keyword
 from tools.delete_skill_keyword import delete_skill_keyword
 from tools.list_skill_keywords import list_skill_keywords
+from tools.samsung_sync_jobs import samsung_sync_jobs
 from tools.save_job_evaluations import save_job_evaluations
 from tools.save_search_preset import save_search_preset
+from tools.sk_sync_jobs import sk_sync_jobs
 from tools.skip_jobs import skip_jobs
 from tools.sync_all_jobs import sync_all_jobs
 from tools.sync_applications import sync_applications
@@ -32,6 +36,10 @@ mcp.tool()(naver_sync_jobs)
 mcp.tool()(coupang_sync_jobs)
 mcp.tool()(kakaobank_sync_jobs)
 mcp.tool()(woowahan_sync_jobs)
+mcp.tool()(cj_sync_jobs)
+mcp.tool()(kt_sync_jobs)
+mcp.tool()(samsung_sync_jobs)
+mcp.tool()(sk_sync_jobs)
 mcp.tool()(sync_applications)
 mcp.tool()(get_unapplied_jobs)
 mcp.tool()(save_search_preset)

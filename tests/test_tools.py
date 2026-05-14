@@ -78,7 +78,7 @@ def test_save_preset_returns_error_on_invalid_key():
 from tools.sync_job_details import sync_job_details
 
 
-def test_sync_job_details_processes_missing():
+async def test_sync_job_details_processes_missing():
     with patch("tools.sync_job_details.get_engine"), \
          patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
@@ -99,14 +99,14 @@ def test_sync_job_details_processes_missing():
         MockClient.return_value = mock_client
 
         from tools.sync_job_details import sync_job_details
-        result = sync_job_details()
+        result = await sync_job_details()
 
     assert "2개 처리" in result
     assert mock_client.fetch_job_detail.call_count == 2
     mock_sleep.assert_called_once_with(CRAWL_DELAY_SECONDS)
 
 
-def test_sync_job_details_skips_failed_fetch():
+async def test_sync_job_details_skips_failed_fetch():
     with patch("tools.sync_job_details.get_engine"), \
          patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
@@ -127,14 +127,14 @@ def test_sync_job_details_skips_failed_fetch():
         MockClient.return_value = mock_client
 
         from tools.sync_job_details import sync_job_details
-        result = sync_job_details()
+        result = await sync_job_details()
 
     called_details = mock_service.upsert_job_details.call_args[0][0]
     assert len(called_details) == 1
     assert called_details[0].job_id == 102  # internal_id로 저장
 
 
-def test_sync_job_details_calls_enrich_for_each_detail():
+async def test_sync_job_details_calls_enrich_for_each_detail():
     detail_101 = JobDetail(job_id=1001, requirements="Python 경험", preferred_points=None, skill_tags=[])
     detail_102 = JobDetail(job_id=1002, requirements="Java 경험", preferred_points=None, skill_tags=[])
 
@@ -154,7 +154,7 @@ def test_sync_job_details_calls_enrich_for_each_detail():
         mock_client.fetch_job_detail.side_effect = [detail_101, detail_102]
         MockClient.return_value = mock_client
 
-        sync_job_details()
+        await sync_job_details()
 
     mock_service.list_keywords.assert_called_once()
     assert mock_service.enrich_skill_tags.call_count == 2

@@ -1,14 +1,22 @@
 from db.connection import get_engine
+from services.cj.cj_application_syncer import CJApplicationSyncer
+from services.cj.cj_constants import CJ
 from services.coupang.coupang_application_syncer import CoupangApplicationSyncer
 from services.coupang.coupang_constants import COUPANG
 from services.jobs.job_service import JobService
 from services.kakaobank.kakaobank_application_syncer import KakaoBankApplicationSyncer
 from services.kakaobank.kakaobank_constants import KAKAO_BANK
+from services.kt.kt_application_syncer import KTApplicationSyncer
+from services.kt.kt_constants import KT
 from services.naver.naver_constants import NAVER
 from services.nhn.nhn_application_syncer import NHNApplicationSyncer
 from services.nhn.nhn_constants import NHN
 from services.remember.remember_application_syncer import RememberApplicationSyncer
 from services.remember.remember_constants import REMEMBER
+from services.samsung.samsung_application_syncer import SamsungApplicationSyncer
+from services.samsung.samsung_constants import SAMSUNG
+from services.sk.sk_application_syncer import SKApplicationSyncer
+from services.sk.sk_constants import SK
 from services.wanted.wanted_application_syncer import WantedApplicationSyncer
 from services.wanted.wanted_constants import WANTED
 from services.woowahan.woowahan_application_syncer import WoowahanApplicationSyncer
@@ -19,6 +27,14 @@ async def sync_applications(source: str = WANTED) -> str:
     """지원현황을 동기화한다. source: WANTED (기본), REMEMBER, NHN, COUPANG, KAKAO_BANK, WOOWAHAN."""
     engine = get_engine()
     service = JobService(engine)
+    if source == CJ:
+        return await CJApplicationSyncer(service).sync()
+    if source == KT:
+        return await KTApplicationSyncer(service).sync()
+    if source == SAMSUNG:
+        return await SamsungApplicationSyncer(service).sync()
+    if source == SK:
+        return await SKApplicationSyncer(service).sync()
     if source == REMEMBER:
         return await RememberApplicationSyncer(service).sync()
     if source == NHN:

@@ -9,18 +9,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from services.cj.cj_constants import CJ
 from services.coupang.coupang_constants import COUPANG
 from services.kakaobank.kakaobank_constants import KAKAO_BANK
+from services.kt.kt_constants import KT
 from services.naver.naver_constants import NAVER
 from services.nhn.nhn_constants import NHN
 from services.remember.remember_constants import REMEMBER, RememberJobCategory
+from services.samsung.samsung_constants import SAMSUNG
+from services.sk.sk_constants import SK
 from services.wanted.wanted_constants import WANTED, WantedJobSort
 from services.woowahan.woowahan_constants import WOOWAHAN
+from tools.cj_sync_jobs import cj_sync_jobs
 from tools.coupang_sync_jobs import coupang_sync_jobs
 from tools.kakaobank_sync_jobs import kakaobank_sync_jobs
+from tools.kt_sync_jobs import kt_sync_jobs
 from tools.naver_sync_jobs import naver_sync_jobs
 from tools.nhn_sync_jobs import nhn_sync_jobs
 from tools.remember_sync_jobs import remember_sync_jobs
+from tools.samsung_sync_jobs import samsung_sync_jobs
+from tools.sk_sync_jobs import sk_sync_jobs
 from tools.sync_applications import sync_applications
 from tools.sync_job_details import sync_job_details
 from tools.wanted_sync_jobs import wanted_sync_jobs
@@ -34,6 +42,10 @@ SOURCES = [
     COUPANG,
     KAKAO_BANK,
     WOOWAHAN,
+    CJ,
+    KT,
+    SAMSUNG,
+    SK,
 ]
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -65,6 +77,14 @@ async def run():
                 kakaobank_sync()
             elif source == WOOWAHAN:
                 woowahan_sync()
+            elif source == CJ:
+                await cj_sync()
+            elif source == KT:
+                await kt_sync()
+            elif source == SAMSUNG:
+                await samsung_sync()
+            elif source == SK:
+                await sk_sync()
             else:
                 raise RuntimeError(f"정의되지 않은 source[{source}] 입니다.")
             synced_count += 1
@@ -76,7 +96,7 @@ async def run():
     else:
         for src in SOURCES:
             try:
-                result = sync_job_details(source=src)
+                result = await sync_job_details(source=src)
                 log(f"sync_job_details({src}): {result}")
             except Exception as e:
                 log(f"sync_job_details({src}): 오류 - {e}")
@@ -148,6 +168,38 @@ def woowahan_sync():
         log(f"woowahan_sync_jobs: {result}")
     except Exception as e:
         log(f"woowahan_sync_jobs: 오류 - {e}")
+
+
+async def cj_sync():
+    try:
+        result = await cj_sync_jobs()
+        log(f"cj_sync_jobs: {result}")
+    except Exception as e:
+        log(f"cj_sync_jobs: 오류 - {e}")
+
+
+async def kt_sync():
+    try:
+        result = await kt_sync_jobs()
+        log(f"kt_sync_jobs: {result}")
+    except Exception as e:
+        log(f"kt_sync_jobs: 오류 - {e}")
+
+
+async def samsung_sync():
+    try:
+        result = await samsung_sync_jobs()
+        log(f"samsung_sync_jobs: {result}")
+    except Exception as e:
+        log(f"samsung_sync_jobs: 오류 - {e}")
+
+
+async def sk_sync():
+    try:
+        result = await sk_sync_jobs()
+        log(f"sk_sync_jobs: {result}")
+    except Exception as e:
+        log(f"sk_sync_jobs: 오류 - {e}")
 
 
 if __name__ == "__main__":
