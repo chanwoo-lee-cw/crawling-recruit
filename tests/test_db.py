@@ -19,6 +19,13 @@ def test_jobs_table_columns():
     }
 
 
+def test_jobs_location_fits_multi_region_value():
+    # SK workingArea는 전 지역명을 콤마로 연결해 105자까지 나온다
+    sk_all_regions = ("Seoul,Gyeonggi/Incheon,Chungcheong,Gyeongsang,Jeolla,Gangwon,"
+                      "Busan,Daegu,Gwangju,Ulsan,Daejeon,NationWide")
+    assert Job.__table__.columns["location"].type.length >= len(sk_all_regions)
+
+
 def test_applications_table_columns():
     col_names = {c.name for c in Application.__table__.columns}
     assert col_names == {"internal_id", "source", "platform_id", "job_id", "status", "apply_time", "synced_at"}

@@ -120,3 +120,18 @@ def migrate_bigint(engine) -> str:
             conn.execute(text("ALTER TABLE applications MODIFY platform_id BIGINT NOT NULL"))
         conn.commit()
     return "BigInteger 마이그레이션 완료"
+
+
+def migrate_location_length(engine) -> str:
+    """jobs.location을 VARCHAR(255)로 확장. SK는 전 지역명을 콤마로 연결해 105자까지 온다. 멱등."""
+    with engine.connect() as conn:
+        r = conn.execute(text(
+            "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS "
+            "WHERE TABLE_NAME='jobs' AND COLUMN_NAME='location' AND TABLE_SCHEMA=DATABASE()"
+        ))
+        row = r.fetchone()
+        if row and row[0] >= 255:
+            return "location 길이 마이그레이션 이미 완료됨"
+        conn.execute(text("ALTER TABLE jobs MODIFY location VARCHAR(255)"))
+        conn.commit()
+    return "location 길이 마이그레이션 완료"

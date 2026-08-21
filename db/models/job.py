@@ -14,7 +14,7 @@ class Job(Base):
     company_id: Mapped[Optional[int]] = mapped_column(Integer)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    location: Mapped[Optional[str]] = mapped_column(String(100))
+    location: Mapped[Optional[str]] = mapped_column(String(255))
     employment_type: Mapped[Optional[str]] = mapped_column(String(50))
     annual_from: Mapped[Optional[int]] = mapped_column(Integer)
     annual_to: Mapped[Optional[int]] = mapped_column(Integer)

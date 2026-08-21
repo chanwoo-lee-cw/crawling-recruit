@@ -1,4 +1,4 @@
-from db.connection import get_engine, migrate, migrate_bigint
+from db.connection import get_engine, migrate, migrate_bigint, migrate_location_length
 
 
 def migrate_db() -> str:
@@ -10,7 +10,8 @@ def migrate_db() -> str:
         engine = get_engine()
         result1 = migrate(engine)
         result2 = migrate_bigint(engine)
-        return f"{result1} / {result2}"
+        result3 = migrate_location_length(engine)
+        return f"{result1} / {result2} / {result3}"
     except Exception as e:
         return f"마이그레이션 오류: {e}"
 
