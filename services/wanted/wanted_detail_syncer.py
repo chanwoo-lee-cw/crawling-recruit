@@ -1,4 +1,4 @@
-import time
+import asyncio
 
 from constants import CRAWL_DELAY_SECONDS
 from domain import JobDetail
@@ -8,7 +8,7 @@ from services.wanted.wanted_constants import WANTED
 
 
 class WantedDetailSyncer(BaseSyncer):
-    def sync(
+    async def sync(
         self,
         job_ids: list[int] | None = None,
         limit: int | None = None,
@@ -23,8 +23,8 @@ class WantedDetailSyncer(BaseSyncer):
         fetched: list[JobDetail] = []
         for i, (internal_id, platform_id) in enumerate(target_pairs):
             if i > 0:
-                time.sleep(CRAWL_DELAY_SECONDS)
-            detail = client.fetch_job_detail(platform_id)
+                await asyncio.sleep(CRAWL_DELAY_SECONDS)
+            detail = await client.fetch_job_detail(platform_id)
             if detail is None:
                 continue
             detail.job_id = internal_id

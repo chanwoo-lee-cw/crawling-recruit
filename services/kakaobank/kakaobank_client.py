@@ -5,6 +5,8 @@ from services.kakaobank.kakaobank_constants import KAKAOBANK_LIST_URL, KAKAOBANK
 
 
 class KakaoBankClient:
+    _HEADERS = {"Accept": "application/json", "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+
     def fetch_jobs(self, limit_pages: int | None = None) -> list[dict]:
         all_jobs: list[dict] = []
         page = 0
@@ -14,6 +16,7 @@ class KakaoBankClient:
             resp = httpx.get(
                 KAKAOBANK_LIST_URL,
                 params={"pageSize": 20, "pageNumber": page},
+                headers=self._HEADERS,
                 timeout=30,
             )
             resp.raise_for_status()

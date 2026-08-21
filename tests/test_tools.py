@@ -82,7 +82,7 @@ async def test_sync_job_details_processes_missing():
     with patch("tools.sync_job_details.get_engine"), \
          patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("services.wanted.wanted_detail_syncer.time.sleep") as mock_sleep:
+         patch("services.wanted.wanted_detail_syncer.asyncio.sleep") as mock_sleep:
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [(101, 1001), (102, 1002)]
@@ -91,7 +91,7 @@ async def test_sync_job_details_processes_missing():
         mock_service.upsert_job_details.return_value = "완료: 2개 처리"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_job_detail.side_effect = [
             JobDetail(job_id=1001, requirements="req1", preferred_points="pref1", skill_tags=[]),
             JobDetail(job_id=1002, requirements="req2", preferred_points=None, skill_tags=[]),
@@ -141,7 +141,7 @@ async def test_sync_job_details_calls_enrich_for_each_detail():
     with patch("tools.sync_job_details.get_engine"), \
          patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("services.wanted.wanted_detail_syncer.time.sleep"):
+         patch("services.wanted.wanted_detail_syncer.asyncio.sleep"):
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [(101, 1001), (102, 1002)]
@@ -150,7 +150,7 @@ async def test_sync_job_details_calls_enrich_for_each_detail():
         mock_service.upsert_job_details.return_value = "완료: 2개 처리"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_job_detail.side_effect = [detail_101, detail_102]
         MockClient.return_value = mock_client
 

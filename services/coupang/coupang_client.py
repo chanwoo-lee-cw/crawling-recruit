@@ -9,10 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class CoupangClient:
+    _HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+
     def fetch_jobs(self) -> list[dict]:
         resp = httpx.get(
             COUPANG_LIST_URL,
             params={"search": "", "location": "South+Korea", "pagesize": COUPANG_PAGE_SIZE},
+            headers=self._HEADERS,
             timeout=30,
         )
         resp.raise_for_status()
