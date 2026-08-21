@@ -115,3 +115,31 @@ def test_job_find_unapplied_with_details_returns_rows():
     repo = JobRepository(mock_session)
     result = repo.find_unapplied_with_details(include_evaluated=False)
     assert result == []
+
+
+def test_find_unapplied_with_details_recent_days_filters_synced_at():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.mappings.return_value.all.return_value = []
+    repo = JobRepository(mock_session)
+    repo.find_unapplied_with_details(recent_days=30)
+    sql = str(mock_session.execute.call_args[0][0])
+    assert "synced_at" in sql
+
+
+def test_find_unapplied_with_details_include_unknown_keeps_null_location():
+    """naver·nhn·kt는 location이 전부 NULL이라 제외하면 소스가 통째로 사라진다."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.mappings.return_value.all.return_value = []
+    repo = JobRepository(mock_session)
+    repo.find_unapplied_with_details(location="서울", include_unknown=True)
+    sql = str(mock_session.execute.call_args[0][0])
+    assert "jobs.location IS NULL" in sql
+
+
+def test_find_unapplied_with_details_include_unknown_false_excludes_null():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.mappings.return_value.all.return_value = []
+    repo = JobRepository(mock_session)
+    repo.find_unapplied_with_details(location="서울", include_unknown=False)
+    sql = str(mock_session.execute.call_args[0][0])
+    assert "jobs.location IS NULL" not in sql

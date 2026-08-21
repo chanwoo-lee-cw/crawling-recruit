@@ -110,7 +110,7 @@ async def test_sync_job_details_skips_failed_fetch():
     with patch("tools.sync_job_details.get_engine"), \
          patch("services.wanted.wanted_detail_syncer.WantedClient") as MockClient, \
          patch("tools.sync_job_details.JobService") as MockService, \
-         patch("services.wanted.wanted_detail_syncer.time.sleep"):
+         patch("services.wanted.wanted_detail_syncer.asyncio.sleep"):
 
         mock_service = MagicMock()
         mock_service.get_jobs_without_details.return_value = [(101, 1001), (102, 1002)]
@@ -119,7 +119,7 @@ async def test_sync_job_details_skips_failed_fetch():
         mock_service.upsert_job_details.return_value = "완료: 1개 처리"
         MockService.return_value = mock_service
 
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         mock_client.fetch_job_detail.side_effect = [
             None,  # 101 실패
             JobDetail(job_id=1002, requirements="req2", preferred_points=None, skill_tags=[]),
@@ -420,6 +420,7 @@ def test_get_job_candidates_passes_include_evaluated():
         employment_type=None,
         include_evaluated=True,
         source=None,
+        recent_days=30,
     )
 
 

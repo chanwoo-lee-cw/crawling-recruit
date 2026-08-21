@@ -11,7 +11,7 @@ from services.coupang.coupang_constants import COUPANG, COUPANG_JOB_BASE_URL
 from services.kakaobank.kakaobank_constants import KAKAO_BANK, KAKAOBANK_JOB_URL
 from services.woowahan.woowahan_constants import WOOWAHAN, WOOWAHAN_JOB_BASE_URL
 from services.cj.cj_constants import CJ, CJ_JOB_URL_PREFIX
-from services.kt.kt_constants import KT, KT_JOB_BASE_URL
+from services.kt.kt_constants import KT, KT_JOB_BASE_URL, extract_kt_platform_id
 from services.samsung.samsung_constants import SAMSUNG, SAMSUNG_JOB_BASE_URL
 from services.sk.sk_constants import SK, SK_JOB_URL_PREFIX
 from db.repositories.search_preset_repository import SearchPresetRepository
@@ -29,6 +29,7 @@ ALLOWED_PRESET_KEYS = {
     "job_category_names", "min_experience", "max_experience", "source",
     "job_series_ids",
 }
+_BACKFILL_BATCH_SIZE = 500
 WANTED_JOB_BASE_URL = "https://www.wanted.co.kr/wd"
 REMEMBER_JOB_BASE_URL = "https://career.rememberapp.co.kr/job/posting"
 
@@ -252,11 +253,7 @@ class JobService:
 
     def _parse_kt_job(self, raw: dict) -> dict:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        notice_url = raw.get("recruitNoticeUrl", "")
-        try:
-            platform_id = int(notice_url.rsplit("/", 1)[-1]) if notice_url and "/" in notice_url else int(raw["recruitNoticeSn"])
-        except (ValueError, IndexError, KeyError):
-            platform_id = int(raw.get("recruitNoticeSn") or raw.get("recruitNoticeNo", 0))
+        platform_id = extract_kt_platform_id(raw)
         emp_raw = raw.get("recruitClassName")
         employment_type = self.EMPLOYMENT_TYPE_MAP.get(emp_raw) if emp_raw else None
         created_at = None
@@ -588,6 +585,8 @@ class JobService:
         employment_type: str | None = None,
         include_evaluated: bool = False,
         source: str | None = None,
+        recent_days: int | None = None,
+        include_unknown: bool = True,
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
@@ -597,6 +596,8 @@ class JobService:
             employment_type=employment_type,
             include_evaluated=include_evaluated,
             source=source,
+            recent_days=recent_days,
+            include_unknown=include_unknown,
         )
         return [JobCandidate.from_row(r) for r in rows]
 
@@ -697,14 +698,17 @@ class JobService:
         skills: list[str],
         rows: list[JobCandidate],
         top_k: int = 15,
+        min_score: int = 0,
     ) -> list[JobCandidate]:
         skills_lower = {s.lower() for s in skills}
 
-        def score(row: JobCandidate) -> int:
-            return sum(1 for tag in row.skill_tags if tag.text.lower() in skills_lower)
-
         with_detail = [r for r in rows if r.fetched_at is not None]
-        scored = sorted(with_detail, key=score, reverse=True)
+        for row in with_detail:
+            row.matched_skills = [t.text for t in row.skill_tags if t.text.lower() in skills_lower]
+            row.match_score = len(row.matched_skills)
+
+        scored = [r for r in with_detail if r.match_score >= min_score]
+        scored.sort(key=lambda r: (r.match_score, r.internal_id), reverse=True)
         return scored[:top_k]
 
     @transactional()
@@ -725,6 +729,44 @@ class JobService:
         if not deleted:
             return f"존재하지 않는 키워드입니다: {keyword}"
         return f"키워드가 삭제되었습니다: {keyword}"
+
+    @transactional()
+    def backfill_skill_tags(self, days: int | None = 30, source: str | None = None) -> str:
+        """이미 수집된 상세 텍스트를 등록 키워드로 재스캔해 skill_tags를 채운다.
+
+        재크롤 없이 DB 텍스트만 사용하며, 이미 있는 태그는 건너뛰므로 여러 번 실행해도 안전하다.
+        days: 최근 N일 내 목록에서 관측된 공고만 대상 (None이면 전체).
+        """
+        keywords = self.list_keywords()
+        if not keywords:
+            return "등록된 스킬 키워드가 없습니다. add_skill_keyword로 먼저 등록해주세요."
+
+        repo = JobDetailRepository(get_current_session())
+        rows = repo.find_for_backfill(days=days, source=source)
+
+        updated = []
+        for row in rows:
+            tags = row.get("skill_tags") or []
+            if isinstance(tags, str):
+                try:
+                    tags = json.loads(tags)
+                except (json.JSONDecodeError, TypeError):
+                    tags = []
+            detail = JobDetail(
+                job_id=row["job_id"],
+                requirements=row.get("requirements"),
+                preferred_points=row.get("preferred_points"),
+                skill_tags=list(tags),
+            )
+            before = len(detail.skill_tags)
+            enriched = self.enrich_skill_tags(detail, keywords)
+            if len(enriched.skill_tags) > before:
+                updated.append({"job_id": row["job_id"], "skill_tags": enriched.skill_tags})
+
+        for i in range(0, len(updated), _BACKFILL_BATCH_SIZE):
+            repo.update_skill_tags(updated[i:i + _BACKFILL_BATCH_SIZE])
+
+        return f"{len(rows)}건 검사, {len(updated)}건 태그 추가"
 
     def enrich_skill_tags(self, job_detail: JobDetail, keywords: list[str]) -> JobDetail:
         if not keywords:

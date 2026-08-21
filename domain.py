@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -22,6 +22,8 @@ class JobCandidate:
     preferred_points: str | None
     skill_tags: list[SkillTag]
     fetched_at: datetime | None
+    match_score: int = 0
+    matched_skills: list[str] = field(default_factory=list)
 
     @classmethod
     def from_row(cls, row) -> "JobCandidate":

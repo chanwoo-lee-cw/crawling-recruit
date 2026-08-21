@@ -13,6 +13,7 @@ from tools.naver_sync_jobs import naver_sync_jobs
 from tools.nhn_sync_jobs import nhn_sync_jobs
 from tools.remember_sync_jobs import remember_sync_jobs
 from tools.add_skill_keyword import add_skill_keyword
+from tools.backfill_skill_tags import backfill_skill_tags
 from tools.delete_skill_keyword import delete_skill_keyword
 from tools.list_skill_keywords import list_skill_keywords
 from tools.samsung_sync_jobs import samsung_sync_jobs
@@ -51,6 +52,7 @@ mcp.tool()(migrate_db)
 mcp.tool()(save_job_evaluations)
 mcp.tool()(add_skill_keyword)
 mcp.tool()(list_skill_keywords)
+mcp.tool()(backfill_skill_tags)
 mcp.tool()(delete_skill_keyword)
 
 if __name__ == "__main__":

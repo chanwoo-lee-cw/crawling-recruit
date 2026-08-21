@@ -640,3 +640,42 @@ def test_parse_job_dispatcher_naver():
     row = service._parse_job(RAW_NAVER_JOB, source=NAVER)
     assert row["source"] == NAVER
     assert row["platform_id"] == 30004786
+
+
+def _candidate(internal_id, tags, fetched_at):
+    return JobCandidate(
+        internal_id=internal_id, source=WANTED, platform_id=1000 + internal_id,
+        company_name="A사", title="Backend", location="서울",
+        employment_type="regular", requirements="req", preferred_points=None,
+        skill_tags=[SkillTag(text=t) for t in tags], fetched_at=fetched_at,
+    )
+
+
+def test_get_recommended_jobs_exposes_score_and_matched_skills():
+    from datetime import datetime
+    now = datetime.now()
+    rows = [_candidate(1, ["Python", "AWS", "React"], now), _candidate(2, ["React"], now)]
+    service = JobService(engine=MagicMock())
+    result = service.get_recommended_jobs(skills=["Python", "AWS"], rows=rows, top_k=15)
+    assert result[0].match_score == 2
+    assert sorted(result[0].matched_skills) == ["AWS", "Python"]
+    assert result[1].match_score == 0
+    assert result[1].matched_skills == []
+
+
+def test_get_recommended_jobs_min_score_filters_unmatched():
+    from datetime import datetime
+    now = datetime.now()
+    rows = [_candidate(1, ["Python"], now), _candidate(2, ["React"], now)]
+    service = JobService(engine=MagicMock())
+    result = service.get_recommended_jobs(skills=["Python"], rows=rows, top_k=15, min_score=1)
+    assert [c.internal_id for c in result] == [1]
+
+
+def test_get_recommended_jobs_tie_break_prefers_recent():
+    from datetime import datetime
+    now = datetime.now()
+    rows = [_candidate(1, ["Python"], now), _candidate(5, ["Python"], now)]
+    service = JobService(engine=MagicMock())
+    result = service.get_recommended_jobs(skills=["Python"], rows=rows, top_k=15)
+    assert [c.internal_id for c in result] == [5, 1]

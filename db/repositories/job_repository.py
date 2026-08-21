@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, text, tuple_
+from sqlalchemy import select, update, text, tuple_, or_
 from sqlalchemy.dialects.mysql import insert
 from db.models import Job, JobDetail as OrmJobDetail, JobSkip, JobEvaluation, Application
 
@@ -110,6 +112,8 @@ class JobRepository:
         employment_type: str | None = None,
         include_evaluated: bool = False,
         source: str | None = None,
+        recent_days: int | None = None,
+        include_unknown: bool = True,
     ) -> list:
         applied_pairs = (
             select(Job.company_name, Job.title)
@@ -134,9 +138,14 @@ class JobRepository:
         if job_group_id is not None:
             stmt = stmt.where(Job.job_group_id == job_group_id)
         if location:
-            stmt = stmt.where(Job.location.ilike(f"%{location}%"))
+            cond = Job.location.ilike(f"%{location}%")
+            stmt = stmt.where(or_(cond, Job.location.is_(None)) if include_unknown else cond)
         if employment_type:
-            stmt = stmt.where(Job.employment_type == employment_type)
+            cond = Job.employment_type == employment_type
+            stmt = stmt.where(or_(cond, Job.employment_type.is_(None)) if include_unknown else cond)
         if source:
             stmt = stmt.where(Job.source == source)
+        if recent_days is not None:
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=recent_days)
+            stmt = stmt.where(Job.synced_at >= cutoff)
         return self.session.execute(stmt).mappings().all()
