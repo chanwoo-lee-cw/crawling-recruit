@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, text, tuple_, or_
+from sqlalchemy import select, update, text, tuple_, or_, func
 from sqlalchemy.dialects.mysql import insert
 from db.models import Job, JobDetail as OrmJobDetail, JobSkip, JobEvaluation, Application
 
@@ -114,6 +114,8 @@ class JobRepository:
         source: str | None = None,
         recent_days: int | None = None,
         include_unknown: bool = True,
+        only_latest_sync: bool = False,
+        sync_tolerance_hours: int = 12,
     ) -> list:
         applied_pairs = (
             select(Job.company_name, Job.title)
@@ -148,4 +150,15 @@ class JobRepository:
         if recent_days is not None:
             cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=recent_days)
             stmt = stmt.where(Job.synced_at >= cutoff)
+        if only_latest_sync:
+            # 소스별 마지막 동기화에 잡히지 않은 공고는 목록에서 내려간 것 = 마감으로 본다.
+            # 한 번의 sync 안에서도 페이지별로 시각이 벌어지므로 여유를 둔다.
+            last_sync = (
+                select(Job.source.label("source"), func.max(Job.synced_at).label("last_sync"))
+                .group_by(Job.source)
+                .subquery()
+            )
+            stmt = stmt.join(last_sync, Job.source == last_sync.c.source).where(
+                Job.synced_at >= last_sync.c.last_sync - text(f"INTERVAL {int(sync_tolerance_hours)} HOUR")
+            )
         return self.session.execute(stmt).mappings().all()

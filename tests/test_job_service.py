@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from db.repositories.job_repository import JobRepository
 from services.wanted.wanted_constants import WANTED
 from services.remember.remember_constants import REMEMBER
 from services.jobs.job_service import JobService, build_job_url
@@ -679,3 +680,12 @@ def test_get_recommended_jobs_tie_break_prefers_recent():
     service = JobService(engine=MagicMock())
     result = service.get_recommended_jobs(skills=["Python"], rows=rows, top_k=15)
     assert [c.internal_id for c in result] == [5, 1]
+
+
+def test_get_unapplied_job_rows_passes_only_latest_sync():
+    mock_session = MagicMock()
+    service = JobService(engine=MagicMock())
+    with patch.object(JobRepository, "find_unapplied_with_details", return_value=[]) as mock_find, \
+         test_session_context(mock_session):
+        service.get_unapplied_job_rows(only_latest_sync=True)
+    assert mock_find.call_args.kwargs["only_latest_sync"] is True

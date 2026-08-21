@@ -421,6 +421,7 @@ def test_get_job_candidates_passes_include_evaluated():
         include_evaluated=True,
         source=None,
         recent_days=30,
+        only_latest_sync=True,
     )
 
 

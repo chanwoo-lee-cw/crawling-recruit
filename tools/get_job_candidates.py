@@ -14,6 +14,7 @@ def get_job_candidates(
     include_evaluated: bool = False,
     recent_days: int | None = 30,
     min_score: int = 1,
+    only_open: bool = True,
 ) -> str:
     """미지원 공고 중 skill_tags 매칭 점수 기준 상위 top_n개 후보를 JSON으로 반환.
 
@@ -24,6 +25,8 @@ def get_job_candidates(
     recent_days: 최근 N일 내 목록에서 관측된 공고만 (기본 30일. None이면 전체).
         오래 전에만 관측된 공고는 대개 마감된 공고다.
     min_score: 최소 매칭 스킬 개수 (기본 1). 0으로 두면 무매칭 공고도 포함.
+    only_open: 소스별 마지막 동기화에 잡힌 공고만 (기본 True). 목록에서 내려간 공고는 마감으로 본다.
+        동기화가 오래 밀린 상태에서 넓게 보려면 False.
     location/employment_type 필터는 값이 NULL인 공고도 통과시킨다
         (naver·nhn·kt는 location이, remember·sk·cj는 employment_type이 비어 있음).
     추천 후 save_job_evaluations를 호출해 각 공고 verdict를 저장할 것. job_id 필드 사용.
@@ -39,6 +42,7 @@ def get_job_candidates(
             include_evaluated=include_evaluated,
             source=source,
             recent_days=recent_days,
+            only_latest_sync=only_open,
         )
         if not rows:
             if not include_evaluated:

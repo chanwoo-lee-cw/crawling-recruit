@@ -587,6 +587,7 @@ class JobService:
         source: str | None = None,
         recent_days: int | None = None,
         include_unknown: bool = True,
+        only_latest_sync: bool = False,
     ) -> list[JobCandidate]:
         if employment_type:
             employment_type = self.EMPLOYMENT_TYPE_MAP.get(employment_type, employment_type)
@@ -598,6 +599,7 @@ class JobService:
             source=source,
             recent_days=recent_days,
             include_unknown=include_unknown,
+            only_latest_sync=only_latest_sync,
         )
         return [JobCandidate.from_row(r) for r in rows]
 

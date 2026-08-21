@@ -143,3 +143,23 @@ def test_find_unapplied_with_details_include_unknown_false_excludes_null():
     repo.find_unapplied_with_details(location="서울", include_unknown=False)
     sql = str(mock_session.execute.call_args[0][0])
     assert "jobs.location IS NULL" not in sql
+
+
+def test_find_unapplied_with_details_only_latest_sync_uses_per_source_max():
+    """매일 도는 소스는 '마지막 동기화에 안 잡혔으면 마감'이 정확한 신호다."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.mappings.return_value.all.return_value = []
+    repo = JobRepository(mock_session)
+    repo.find_unapplied_with_details(only_latest_sync=True)
+    sql = str(mock_session.execute.call_args[0][0])
+    assert "max(jobs.synced_at)" in sql.lower()
+    assert "group by jobs.source" in sql.lower()
+
+
+def test_find_unapplied_with_details_skips_latest_sync_filter_by_default():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.mappings.return_value.all.return_value = []
+    repo = JobRepository(mock_session)
+    repo.find_unapplied_with_details()
+    sql = str(mock_session.execute.call_args[0][0])
+    assert "max(jobs.synced_at)" not in sql.lower()
