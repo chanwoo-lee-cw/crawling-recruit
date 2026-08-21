@@ -48,9 +48,11 @@ class SKDetailSyncer(BaseSyncer):
             h3_text = h3.get_text(strip=True)
             items = [li.get_text(strip=True) for li in section.select("ul.asset-list li") if li.get_text(strip=True)]
             text = "\n".join(items) or None
-            if "함께 하고 싶습니다" in h3_text:
+            # SK는 같은 페이지를 한국어/영문 제목으로 모두 내려준다
+            h3_lower = h3_text.lower()
+            if "함께 하고 싶" in h3_text or "looking for" in h3_lower:
                 requirements = text
-            elif "경험이 있다면" in h3_text:
+            elif "경험이 있다면" in h3_text or "preferred" in h3_lower:
                 preferred_points = text
 
         return {"requirements": requirements, "preferred_points": preferred_points}

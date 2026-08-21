@@ -104,3 +104,42 @@ def test_parse_nhn_applications_skips_incomplete():
     assert result[0]["platform_id"] == 4079920720933035925
     assert result[0]["status"] == "application-completed"
     assert result[0]["apply_time_str"] == "2026-04-20 12:18:00"
+
+
+REAL_NHN_DETAIL = {
+    "id": "4002243453274688309",
+    "jobSeries": [{"id": "s1", "name": "Backend"}],
+    "jobPostingContentsItems": [
+        {"title": "이런 업무를 해요 (주요 업무)", "contents": [{"contents": "결제/정산 시스템 개발"}]},
+        {"title": "이런 분들을 찾고 있어요 (자격 요건)", "contents": [
+            {"contents": "Java 개발 및 Spring Framework을 활용한 서비스 개발 경력을 3년 이상 보유하신 분"},
+            {"contents": "RDB 개발 경험을 3년 이상 보유하신 분"},
+        ]},
+        {"title": "이런 분이면 더 좋아요 (우대 사항)", "contents": [
+            {"contents": "NoSQL 실무 경험(Redis 등)을 가지신 분"},
+        ]},
+        {"title": "꼭 확인해주세요", "contents": [{"contents": "병역의무를 필하였거나 면제된 분"}]},
+    ],
+}
+
+
+def test_parse_nhn_detail_handles_spaced_section_titles():
+    """실제 NHN 제목은 '이런 분들을 찾고 있어요 (자격 요건)'처럼 띄어쓰기가 들어간다."""
+    parsed = NHNDetailSyncer._parse_nhn_detail(REAL_NHN_DETAIL)
+    assert "Java 개발 및 Spring Framework" in parsed["requirements"]
+    assert "RDB 개발 경험" in parsed["requirements"]
+    assert "NoSQL 실무 경험" in parsed["preferred_points"]
+
+
+def test_parse_nhn_detail_handles_dict_contents():
+    """contents 항목이 문자열이 아니라 {'contents': ...} dict로 온다."""
+    parsed = NHNDetailSyncer._parse_nhn_detail(REAL_NHN_DETAIL)
+    assert "{" not in parsed["requirements"]
+    assert parsed["requirements"].count("\n") == 1
+
+
+def test_parse_nhn_detail_excludes_non_requirement_sections():
+    parsed = NHNDetailSyncer._parse_nhn_detail(REAL_NHN_DETAIL)
+    assert "병역의무" not in (parsed["requirements"] or "")
+    assert "병역의무" not in (parsed["preferred_points"] or "")
+    assert "결제/정산" not in (parsed["requirements"] or "")

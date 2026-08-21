@@ -32,9 +32,9 @@ async def sync_job_details(
     """공고 상세정보를 동기화한다. source: WANTED (기본), REMEMBER, NHN, NAVER, COUPANG, KAKAO_BANK, WOOWAHAN."""
     service = JobService(get_engine())
     if source == CJ:
-        return await CJDetailSyncer(service).sync()
+        return await CJDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
     if source == KT:
-        return await KTDetailSyncer(service).sync()
+        return await KTDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
     if source == SAMSUNG:
         return SamsungDetailSyncer(service).sync(job_ids=job_ids, limit=limit)
     if source == SK:

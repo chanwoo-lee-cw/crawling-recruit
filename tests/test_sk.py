@@ -71,3 +71,35 @@ def test_build_job_url_sk():
     url = build_job_url("sk", 260107)
     assert "skcareers.com" in url
     assert "R260107" in url
+
+
+SAMPLE_DETAIL_HTML_EN = """
+<div class="detail-content-item">
+  <h3 class="detail-content-title">Who We're Looking For</h3>
+  <ul class="asset-list">
+    <li>자동화 테스트 환경 구축 경력 5년 이상</li>
+    <li>Java, Spring 기반 개발 경험</li>
+  </ul>
+</div>
+<div class="detail-content-item">
+  <h3 class="detail-content-title">Preferred Qualifications</h3>
+  <ul class="asset-list">
+    <li>Kubernetes 운영 경험</li>
+  </ul>
+</div>
+<div class="detail-content-item">
+  <h3 class="detail-content-title">Recruiting Process</h3>
+  <ul class="asset-list">
+    <li>서류 &gt; 1차 인터뷰 &gt; 최종합격</li>
+  </ul>
+</div>
+"""
+
+
+def test_sk_detail_syncer_parse_english_titles():
+    """SK 상세 페이지는 영문 섹션 제목으로 내려온다."""
+    from services.sk.sk_detail_syncer import SKDetailSyncer
+    parsed = SKDetailSyncer._parse_detail_html(SAMPLE_DETAIL_HTML_EN)
+    assert "Java, Spring 기반 개발 경험" in parsed["requirements"]
+    assert "Kubernetes 운영 경험" in parsed["preferred_points"]
+    assert "인터뷰" not in (parsed["requirements"] or "")

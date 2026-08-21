@@ -44,14 +44,26 @@ class NHNDetailSyncer(BaseSyncer):
         return self.service.upsert_job_details(fetched)
 
     @staticmethod
+    def _contents_text(contents) -> str | None:
+        """contents 항목은 문자열로도, {'contents': ...} dict로도 온다."""
+        lines = []
+        for entry in contents or []:
+            value = entry.get("contents") if isinstance(entry, dict) else entry
+            if value:
+                lines.append(str(value).strip())
+        return "\n".join(lines) or None
+
+    @staticmethod
     def _parse_nhn_detail(raw: dict) -> dict:
         items = raw.get("jobPostingContentsItems") or []
         requirements = None
         preferred_points = None
         for item in items:
-            title = item.get("title", "")
-            contents = item.get("contents") or []
-            text = "\n".join(contents) if contents else None
+            title = (item.get("title") or "").replace(" ", "")
+            text = NHNDetailSyncer._contents_text(item.get("contents"))
+            if not text:
+                continue
+            # 실제 제목은 "이런 분들을 찾고 있어요 (자격 요건)"처럼 문구가 붙고 띄어쓰기도 들어간다
             if "자격요건" in title:
                 requirements = text
             elif "우대사항" in title:
