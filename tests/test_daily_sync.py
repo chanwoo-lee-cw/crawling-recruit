@@ -1,4 +1,5 @@
-from unittest.mock import patch, AsyncMock
+import pytest
+from unittest.mock import patch, call, AsyncMock
 
 from services.coupang.coupang_constants import COUPANG
 from services.kakaobank.kakaobank_constants import KAKAO_BANK
@@ -138,3 +139,26 @@ async def test_run_continues_after_sync_job_details_failure():
         await run()
 
     assert mock_apps.call_count >= 1
+
+
+def test_remember_job_category_payload_uses_level_pairs():
+    """리멤버 API는 {'name': ...}가 아니라 {'level1','level2'} 쌍으로 필터링한다.
+
+    매칭되는 카테고리가 없으면 필터를 통째로 무시하고 전 직군을 반환해서,
+    마케팅·영업 공고까지 수집되고 있었다. (docs/리멤버_type.md)
+    """
+    from services.remember.remember_constants import RememberJobCategory
+    payloads = [cat.payload for cat in RememberJobCategory]
+    assert all(set(p) == {"level1", "level2"} for p in payloads)
+    assert {"level1": "SW개발", "level2": "백엔드"} in payloads
+
+
+@pytest.mark.asyncio
+async def test_daily_sync_remember_passes_level_pairs():
+    from services.remember.remember_constants import RememberJobCategory
+    with patch("scripts.daily_sync.remember_sync_jobs", new=AsyncMock(return_value="완료")) as mock_sync:
+        from scripts.daily_sync import remember_sync
+        await remember_sync()
+    sent = mock_sync.call_args.kwargs["job_category_names"]
+    assert sent == [cat.payload for cat in RememberJobCategory]
+    assert all("name" not in p for p in sent)

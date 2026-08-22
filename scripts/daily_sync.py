@@ -123,7 +123,7 @@ async def wanted_sync():
 async def remember_sync():
     try:
         result = await remember_sync_jobs(
-            job_category_names=[{"name": cat.value} for cat in RememberJobCategory]
+            job_category_names=[cat.payload for cat in RememberJobCategory]
         )
         log(f"remember_sync_jobs: {result}")
     except Exception as e:
